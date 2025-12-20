@@ -14,21 +14,23 @@ import AuthLayout from './components/layout/AuthLayout';
 import Login from './pages/auth/Login';
 import Register from './pages/auth/Register';
 
-// Customer Pages
+// Customer/Product Pages
 import Home from './pages/customer/Home';
-import ServiceList from './pages/customer/ServiceList';
-import ServiceDetail from './pages/customer/ServiceDetail';
-import MyBookings from './pages/customer/MyBookings';
+import ProductList from './pages/customer/ProductList';
+import ProductDetail from './pages/customer/ProductDetail';
+import Cart from './pages/customer/Cart';
+import MyOrders from './pages/customer/MyOrders';
+import Profile from './pages/customer/Profile';
 
 // Employee Pages
 import EmployeeDashboard from './pages/employee/Dashboard';
-import EmployeeBookings from './pages/employee/Bookings';
+import EmployeeOrders from './pages/employee/Orders';
 
 // Admin Pages
 import AdminDashboard from './pages/admin/Dashboard';
-import AdminServices from './pages/admin/Services';
+import AdminProducts from './pages/admin/Products';
 import AdminEmployees from './pages/admin/Employees';
-import AdminBookings from './pages/admin/Bookings';
+import AdminOrders from './pages/admin/Orders';
 import AdminCoupons from './pages/admin/Coupons';
 import AdminPayments from './pages/admin/Payments';
 
@@ -43,7 +45,7 @@ const queryClient = new QueryClient({
     queries: {
       refetchOnWindowFocus: false,
       retry: 1,
-      staleTime: 5 * 60 * 1000, // 5 minutes
+      staleTime: 5 * 60 * 1000,
     },
   },
 });
@@ -51,7 +53,6 @@ const queryClient = new QueryClient({
 function App() {
   const { initAuth } = useAuthStore();
 
-  // Initialize auth on app load
   useEffect(() => {
     initAuth();
   }, [initAuth]);
@@ -60,47 +61,116 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <Router>
         <Routes>
-          {/* Public Routes - Auth */}
-          <Route element={<AuthLayout />}>
-            <Route path="/auth/login" element={<Login />} />
-            <Route path="/auth/register" element={<Register />} />
-          </Route>
+          {/* Auth Routes */}
+          <Route path="/auth/login" element={<AuthLayout><Login /></AuthLayout>} />
+          <Route path="/auth/register" element={<AuthLayout><Register /></AuthLayout>} />
 
-          {/* Public Routes - Customer */}
-          <Route element={<AppLayout />}>
-            <Route path="/" element={<Home />} />
-            <Route path="/services" element={<ServiceList />} />
-            <Route path="/services/:id" element={<ServiceDetail />} />
-          </Route>
+          {/* Public Product Routes */}
+          <Route path="/" element={<AppLayout><Home /></AppLayout>} />
+          <Route path="/products" element={<AppLayout><ProductList /></AppLayout>} />
+          <Route path="/products/category/:category" element={<AppLayout><ProductList /></AppLayout>} />
+          <Route path="/products/:id" element={<AppLayout><ProductDetail /></AppLayout>} />
 
           {/* Protected Customer Routes */}
-          <Route element={<PrivateRoute><AppLayout /></PrivateRoute>}>
-            <Route path="/my/bookings" element={<MyBookings />} />
-          </Route>
+          <Route
+            path="/cart"
+            element={
+              <PrivateRoute>
+                <AppLayout><Cart /></AppLayout>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/my/orders"
+            element={
+              <PrivateRoute>
+                <AppLayout><MyOrders /></AppLayout>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              <PrivateRoute>
+                <AppLayout><Profile /></AppLayout>
+              </PrivateRoute>
+            }
+          />
 
           {/* Employee Routes */}
-          <Route element={<RoleRoute role="EMPLOYEE"><AppLayout /></RoleRoute>}>
-            <Route path="/employee" element={<EmployeeDashboard />} />
-            <Route path="/employee/bookings" element={<EmployeeBookings />} />
-          </Route>
+          <Route
+            path="/employee"
+            element={
+              <RoleRoute role="EMPLOYEE">
+                <AppLayout><EmployeeDashboard /></AppLayout>
+              </RoleRoute>
+            }
+          />
+          <Route
+            path="/employee/orders"
+            element={
+              <RoleRoute role="EMPLOYEE">
+                <AppLayout><EmployeeOrders /></AppLayout>
+              </RoleRoute>
+            }
+          />
 
           {/* Admin Routes */}
-          <Route element={<RoleRoute role="ADMIN"><AppLayout /></RoleRoute>}>
-            <Route path="/admin" element={<AdminDashboard />} />
-            <Route path="/admin/services" element={<AdminServices />} />
-            <Route path="/admin/employees" element={<AdminEmployees />} />
-            <Route path="/admin/bookings" element={<AdminBookings />} />
-            <Route path="/admin/coupons" element={<AdminCoupons />} />
-            <Route path="/admin/payments" element={<AdminPayments />} />
-          </Route>
+          <Route
+            path="/admin"
+            element={
+              <RoleRoute role="ADMIN">
+                <AppLayout><AdminDashboard /></AppLayout>
+              </RoleRoute>
+            }
+          />
+          <Route
+            path="/admin/products"
+            element={
+              <RoleRoute role="ADMIN">
+                <AppLayout><AdminProducts /></AppLayout>
+              </RoleRoute>
+            }
+          />
+          <Route
+            path="/admin/employees"
+            element={
+              <RoleRoute role="ADMIN">
+                <AppLayout><AdminEmployees /></AppLayout>
+              </RoleRoute>
+            }
+          />
+          <Route
+            path="/admin/orders"
+            element={
+              <RoleRoute role="ADMIN">
+                <AppLayout><AdminOrders /></AppLayout>
+              </RoleRoute>
+            }
+          />
+          <Route
+            path="/admin/coupons"
+            element={
+              <RoleRoute role="ADMIN">
+                <AppLayout><AdminCoupons /></AppLayout>
+              </RoleRoute>
+            }
+          />
+          <Route
+            path="/admin/payments"
+            element={
+              <RoleRoute role="ADMIN">
+                <AppLayout><AdminPayments /></AppLayout>
+              </RoleRoute>
+            }
+          />
 
-          {/* 404 Not Found */}
+          {/* 404 */}
           <Route path="/404" element={<NotFound />} />
           <Route path="*" element={<Navigate to="/404" replace />} />
         </Routes>
       </Router>
 
-      {/* Toast Notifications */}
       <Toaster
         position="top-right"
         toastOptions={{

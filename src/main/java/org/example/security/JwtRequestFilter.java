@@ -28,6 +28,14 @@ public class JwtRequestFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
 
+        // Skip JWT validation for auth endpoints
+        String path = request.getRequestURI();
+        if (path.startsWith("/api/auth/") || path.startsWith("/actuator/") ||
+            path.startsWith("/h2-console/") || path.equals("/error")) {
+            chain.doFilter(request, response);
+            return;
+        }
+
         final String authorizationHeader = request.getHeader("Authorization");
 
         String username = null;

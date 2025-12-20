@@ -23,8 +23,34 @@ export default function Register() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    // Client-side validation
+    if (formData.name.trim().length < 2) {
+      toast.error('Name must be at least 2 characters');
+      return;
+    }
+
+    if (!/^[a-zA-Z\s]+$/.test(formData.name)) {
+      toast.error('Name should contain only letters and spaces');
+      return;
+    }
+
+    if (!/^[6-9][0-9]{9}$/.test(formData.mobile)) {
+      toast.error('Mobile number must be 10 digits starting with 6-9 (without 0 or +91)');
+      return;
+    }
+
+    if (formData.password.length < 6) {
+      toast.error('Password must be at least 6 characters');
+      return;
+    }
+
     if (formData.password !== formData.confirmPassword) {
       toast.error('Passwords do not match');
+      return;
+    }
+
+    if (formData.pincode && !/^[0-9]{6}$/.test(formData.pincode)) {
+      toast.error('Pincode must be exactly 6 digits');
       return;
     }
 
@@ -36,7 +62,16 @@ export default function Register() {
       toast.success('Registration successful!');
       navigate('/');
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Registration failed');
+      // Handle validation errors from backend
+      const errorMessage = error.response?.data?.message || 'Registration failed';
+
+      // Parse validation errors if available
+      if (error.response?.data?.errors) {
+        const errors = error.response.data.errors;
+        errors.forEach(err => toast.error(err.message || err));
+      } else {
+        toast.error(errorMessage);
+      }
     } finally {
       setLoading(false);
     }
@@ -62,8 +97,11 @@ export default function Register() {
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 className="input"
                 placeholder="John Doe"
+                pattern="[a-zA-Z\s]{2,100}"
+                title="Name should contain only letters and spaces (2-100 characters)"
                 required
               />
+              <p className="mt-1 text-xs text-gray-500">Only letters and spaces allowed</p>
             </div>
 
             <div>
@@ -90,8 +128,12 @@ export default function Register() {
                 onChange={(e) => setFormData({ ...formData, mobile: e.target.value })}
                 className="input"
                 placeholder="9876543210"
+                pattern="[6-9][0-9]{9}"
+                maxLength={10}
+                title="10 digits starting with 6-9 (without 0 or +91)"
                 required
               />
+              <p className="mt-1 text-xs text-gray-500">10 digits starting with 6-9 (no 0 or +91)</p>
             </div>
 
             <div>
@@ -104,6 +146,7 @@ export default function Register() {
                 onChange={(e) => setFormData({ ...formData, city: e.target.value })}
                 className="input"
                 placeholder="Bangalore"
+                maxLength={50}
               />
             </div>
 
@@ -117,9 +160,12 @@ export default function Register() {
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                 className="input"
                 placeholder="••••••••"
-                required
                 minLength={6}
+                maxLength={50}
+                title="Password must be 6-50 characters"
+                required
               />
+              <p className="mt-1 text-xs text-gray-500">Minimum 6 characters</p>
             </div>
 
             <div>
@@ -132,10 +178,59 @@ export default function Register() {
                 onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
                 className="input"
                 placeholder="••••••••"
-                required
                 minLength={6}
+                maxLength={50}
+                required
               />
             </div>
+          </div>
+
+          {/* Additional optional fields */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                State
+              </label>
+              <input
+                type="text"
+                value={formData.state}
+                onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+                className="input"
+                placeholder="Karnataka"
+                maxLength={50}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Pincode
+              </label>
+              <input
+                type="text"
+                value={formData.pincode}
+                onChange={(e) => setFormData({ ...formData, pincode: e.target.value })}
+                className="input"
+                placeholder="560001"
+                pattern="[0-9]{6}"
+                maxLength={6}
+                title="6 digit pincode"
+              />
+              <p className="mt-1 text-xs text-gray-500">6 digits only</p>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Address
+            </label>
+            <textarea
+              value={formData.address}
+              onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+              className="input"
+              placeholder="Street, Area, Landmark"
+              rows={2}
+              maxLength={200}
+            />
           </div>
 
           <button

@@ -7,7 +7,7 @@ import lombok.Data;
 @Data
 public class LoginRequest {
     @NotBlank(message = "Email is required")
-    @Email(message = "Email should be valid")
+    @Email(message = "Please enter a valid email address")
     private String email;
 
     @NotBlank(message = "Password is required")
