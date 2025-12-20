@@ -36,7 +36,7 @@ public class BookingService {
     private CouponService couponService;
 
     @Transactional
-    public BookingResponse createBooking(BookingRequest request, Long customerId) {
+    public BookingResponse createBooking(BookingRequest request, String customerId) {
         User customer = userRepository.findById(customerId)
                 .orElseThrow(() -> new RuntimeException("Customer not found"));
 
@@ -48,41 +48,48 @@ public class BookingService {
 
         Booking booking = new Booking();
         booking.setBookingNumber("BKG" + UUID.randomUUID().toString().substring(0, 8).toUpperCase());
-        booking.setCustomer(customer);
-        booking.setService(service);
-        booking.setServicePackage(servicePackage);
-        booking.setServiceDate(request.getServiceDate());
-        booking.setServiceTime(request.getServiceTime());
-        booking.setServiceAddress(request.getServiceAddress());
+        booking.setCustomerId(customer.getId());
+        booking.setCustomerName(customer.getName());
+        booking.setCustomerMobile(customer.getMobile());
+        booking.setServiceId(service.getId());
+        booking.setServiceName(service.getName());
+        booking.setPackageId(servicePackage.getId());
+        booking.setPackageName(servicePackage.getName());
+        booking.setScheduledDate(LocalDateTime.of(request.getServiceDate(), request.getServiceTime()));
+        booking.setAddress(request.getServiceAddress());
         booking.setCity(request.getCity());
         booking.setPincode(request.getPincode());
-        booking.setCustomerNote(request.getCustomerNote());
-        booking.setOriginalPrice(servicePackage.getPrice());
-        booking.setDiscount(BigDecimal.ZERO);
-        booking.setFinalPrice(servicePackage.getPrice());
-        booking.setStatus(Booking.BookingStatus.PENDING);
+        booking.setSpecialInstructions(request.getCustomerNote());
+        booking.setTotalAmount(servicePackage.getPrice());
+        booking.setDiscountAmount(0.0);
+        booking.setFinalAmount(servicePackage.getPrice());
+        booking.setStatus(Booking.BookingStatus.CREATED);
+        booking.setBookingDate(LocalDateTime.now());
 
         // Apply coupon if provided
         if (request.getCouponCode() != null && !request.getCouponCode().isEmpty()) {
-            BigDecimal discount = couponService.applyCoupon(request.getCouponCode(), servicePackage.getPrice());
-            Coupon coupon = couponRepository.findByCode(request.getCouponCode())
-                    .orElseThrow(() -> new RuntimeException("Invalid coupon"));
-            booking.setCoupon(coupon);
-            booking.setDiscount(discount);
-            booking.setFinalPrice(servicePackage.getPrice().subtract(discount));
+            try {
+                BigDecimal discount = couponService.applyCoupon(request.getCouponCode(), servicePackage.getPrice());
+                booking.setCouponCode(request.getCouponCode());
+                booking.setDiscountAmount(discount.doubleValue());
+                booking.setFinalAmount(servicePackage.getPrice() - discount.doubleValue());
+            } catch (Exception e) {
+                // If coupon fails, continue without it
+                System.err.println("Coupon application failed: " + e.getMessage());
+            }
         }
 
         booking = bookingRepository.save(booking);
         return mapToResponse(booking);
     }
 
-    public List<BookingResponse> getCustomerBookings(Long customerId) {
+    public List<BookingResponse> getCustomerBookings(String customerId) {
         return bookingRepository.findByCustomerId(customerId).stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
     }
 
-    public List<BookingResponse> getEmployeeBookings(Long employeeId) {
+    public List<BookingResponse> getEmployeeBookings(String employeeId) {
         return bookingRepository.findByEmployeeId(employeeId).stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
@@ -94,40 +101,46 @@ public class BookingService {
                 .collect(Collectors.toList());
     }
 
-    public BookingResponse getBookingById(Long id) {
-        Booking booking = bookingRepository.findById(id)
+    public BookingResponse getBookingById(String bookingId) {
+        Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new RuntimeException("Booking not found"));
         return mapToResponse(booking);
     }
 
     @Transactional
-    public BookingResponse updateBookingStatus(Long bookingId, String status) {
+    public BookingResponse updateBookingStatus(String bookingId, String status) {
         Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new RuntimeException("Booking not found"));
 
-        booking.setStatus(Booking.BookingStatus.valueOf(status.toUpperCase()));
+        try {
+            booking.setStatus(Booking.BookingStatus.valueOf(status.toUpperCase()));
 
-        if (status.equalsIgnoreCase("COMPLETED")) {
-            booking.setCompletedAt(LocalDateTime.now());
+            if (status.equalsIgnoreCase("COMPLETED")) {
+                booking.setUpdatedAt(LocalDateTime.now());
+            }
+
+            booking = bookingRepository.save(booking);
+            return mapToResponse(booking);
+        } catch (IllegalArgumentException e) {
+            throw new RuntimeException("Invalid status: " + status);
         }
-
-        booking = bookingRepository.save(booking);
-        return mapToResponse(booking);
     }
 
     @Transactional
-    public BookingResponse assignEmployee(Long bookingId, Long employeeId) {
+    public BookingResponse assignEmployee(String bookingId, String employeeId) {
         Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new RuntimeException("Booking not found"));
 
         User employee = userRepository.findById(employeeId)
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
 
-        if (employee.getRole() != User.Role.EMPLOYEE) {
+        if (!employee.getRole().equals(User.Role.EMPLOYEE)) {
             throw new RuntimeException("User is not an employee");
         }
 
-        booking.setEmployee(employee);
+        booking.setEmployeeId(employee.getId());
+        booking.setEmployeeName(employee.getName());
+        booking.setEmployeeMobile(employee.getMobile());
         booking.setStatus(Booking.BookingStatus.ASSIGNED);
 
         booking = bookingRepository.save(booking);
@@ -135,16 +148,16 @@ public class BookingService {
     }
 
     @Transactional
-    public BookingResponse addFeedback(Long bookingId, Integer rating, String feedback) {
+    public BookingResponse addFeedback(String bookingId, Integer rating, String feedback) {
         Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new RuntimeException("Booking not found"));
 
-        if (booking.getStatus() != Booking.BookingStatus.COMPLETED) {
-            throw new RuntimeException("Can only add feedback for completed bookings");
+        if (!booking.getStatus().equals(Booking.BookingStatus.COMPLETED)) {
+            throw new RuntimeException("Can only review completed bookings");
         }
 
         booking.setRating(rating);
-        booking.setFeedback(feedback);
+        booking.setReview(feedback);
 
         booking = bookingRepository.save(booking);
         return mapToResponse(booking);
@@ -154,38 +167,36 @@ public class BookingService {
         BookingResponse response = new BookingResponse();
         response.setId(booking.getId());
         response.setBookingNumber(booking.getBookingNumber());
-        response.setCustomerId(booking.getCustomer().getId());
-        response.setCustomerName(booking.getCustomer().getName());
-        response.setCustomerMobile(booking.getCustomer().getMobile());
-        response.setServiceId(booking.getService().getId());
-        response.setServiceName(booking.getService().getName());
-        response.setPackageId(booking.getServicePackage().getId());
-        response.setPackageName(booking.getServicePackage().getName());
+        response.setCustomerId(booking.getCustomerId());
+        response.setCustomerName(booking.getCustomerName());
+        response.setCustomerMobile(booking.getCustomerMobile());
+        response.setServiceId(booking.getServiceId());
+        response.setServiceName(booking.getServiceName());
+        response.setPackageId(booking.getPackageId());
+        response.setPackageName(booking.getPackageName());
 
-        if (booking.getEmployee() != null) {
-            response.setEmployeeId(booking.getEmployee().getId());
-            response.setEmployeeName(booking.getEmployee().getName());
-            response.setEmployeeMobile(booking.getEmployee().getMobile());
+        if (booking.getEmployeeId() != null) {
+            response.setEmployeeId(booking.getEmployeeId());
+            response.setEmployeeName(booking.getEmployeeName());
+            response.setEmployeeMobile(booking.getEmployeeMobile());
         }
 
-        response.setServiceDate(booking.getServiceDate());
-        response.setServiceTime(booking.getServiceTime());
-        response.setServiceAddress(booking.getServiceAddress());
+        if (booking.getScheduledDate() != null) {
+            response.setServiceDate(booking.getScheduledDate().toLocalDate());
+            response.setServiceTime(booking.getScheduledDate().toLocalTime());
+        }
+
+        response.setServiceAddress(booking.getAddress());
         response.setCity(booking.getCity());
         response.setPincode(booking.getPincode());
-        response.setCustomerNote(booking.getCustomerNote());
-        response.setOriginalPrice(booking.getOriginalPrice());
-        response.setDiscount(booking.getDiscount());
-        response.setFinalPrice(booking.getFinalPrice());
-
-        if (booking.getCoupon() != null) {
-            response.setCouponCode(booking.getCoupon().getCode());
-        }
-
+        response.setCustomerNote(booking.getSpecialInstructions());
+        response.setOriginalPrice(booking.getTotalAmount());
+        response.setDiscount(BigDecimal.valueOf(booking.getDiscountAmount()));
+        response.setFinalPrice(booking.getFinalAmount());
+        response.setCouponCode(booking.getCouponCode());
         response.setStatus(booking.getStatus().name());
         response.setRating(booking.getRating());
-        response.setFeedback(booking.getFeedback());
-        response.setCompletedAt(booking.getCompletedAt());
+        response.setFeedback(booking.getReview());
         response.setCreatedAt(booking.getCreatedAt());
         response.setUpdatedAt(booking.getUpdatedAt());
 

@@ -1,18 +1,26 @@
 package org.example.repository;
 
 import org.example.entity.Coupon;
-import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.stereotype.Repository;
 
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
 @Repository
-public interface CouponRepository extends JpaRepository<Coupon, Long> {
+public interface CouponRepository extends MongoRepository<Coupon, String> {
+
     Optional<Coupon> findByCode(String code);
+
+    List<Coupon> findByActive(Boolean active);
+
     List<Coupon> findByActiveTrue();
-    List<Coupon> findByValidFromLessThanEqualAndValidUntilGreaterThanEqualAndActiveTrue(
-        LocalDate startDate, LocalDate endDate);
+
+    List<Coupon> findByValidFromBeforeAndValidUntilAfterAndActiveTrue(
+        LocalDateTime now1, LocalDateTime now2, Boolean active
+    );
+
+    boolean existsByCode(String code);
 }
 

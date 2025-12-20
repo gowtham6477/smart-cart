@@ -4,8 +4,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
-import java.math.BigDecimal;
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Data
 public class CouponRequest {
@@ -18,16 +17,16 @@ public class CouponRequest {
     private String discountType; // PERCENTAGE or FIXED_AMOUNT
 
     @NotNull(message = "Discount value is required")
-    private BigDecimal discountValue;
+    private Double discountValue;
 
-    private BigDecimal minOrderValue;
-    private BigDecimal maxDiscountAmount;
+    private Double minOrderValue;
+    private Double maxDiscountAmount;
 
     @NotNull(message = "Valid from date is required")
-    private LocalDate validFrom;
+    private LocalDateTime validFrom;
 
     @NotNull(message = "Valid until date is required")
-    private LocalDate validUntil;
+    private LocalDateTime validUntil;
 
     @NotNull(message = "Usage limit is required")
     private Integer usageLimit;

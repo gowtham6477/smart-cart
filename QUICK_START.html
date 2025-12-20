@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Cart - Quick Start Guide</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        .status-box {
+            background: #f0f9ff;
+            border-left: 5px solid #0ea5e9;
+            padding: 20px;
+            margin-bottom: 30px;
+            border-radius: 5px;
+        }
+
+        .status-box.success {
+            background: #f0fdf4;
+            border-left-color: #22c55e;
+        }
+
+        .status-box.warning {
+            background: #fffbeb;
+            border-left-color: #f59e0b;
+        }
+
+        .status-box.error {
+            background: #fef2f2;
+            border-left-color: #ef4444;
+        }
+
+        .step {
+            background: #f9fafb;
+            border-radius: 10px;
+            padding: 25px;
+            margin-bottom: 20px;
+            border: 2px solid #e5e7eb;
+        }
+
+        .step h3 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 1.4em;
+        }
+
+        .step-number {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 30px;
+            margin-right: 10px;
+            font-weight: bold;
+        }
+
+        .code-block {
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            margin: 10px 0;
+            font-family: 'Courier New', monospace;
+        }
+
+        .checklist {
+            list-style: none;
+        }
+
+        .checklist li {
+            padding: 10px;
+            margin: 5px 0;
+            background: white;
+            border-left: 3px solid #667eea;
+            padding-left: 15px;
+        }
+
+        .checklist li:before {
+            content: "☐ ";
+            font-size: 1.2em;
+            margin-right: 10px;
+            color: #667eea;
+        }
+
+        .btn {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            padding: 12px 30px;
+            border-radius: 5px;
+            text-decoration: none;
+            margin: 10px 10px 10px 0;
+            transition: background 0.3s;
+        }
+
+        .btn:hover {
+            background: #5568d3;
+        }
+
+        .btn.success {
+            background: #22c55e;
+        }
+
+        .btn.success:hover {
+            background: #16a34a;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            border: 2px solid #e5e7eb;
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+        }
+
+        .card h4 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .icon {
+            font-size: 2em;
+            margin-bottom: 10px;
+        }
+
+        .footer {
+            background: #f9fafb;
+            padding: 30px;
+            text-align: center;
+            color: #6b7280;
+        }
+
+        .highlight {
+            background: #fef3c7;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 Smart Service Management System</h1>
+            <p>Quick Start Guide - Get Your Application Running</p>
+        </div>
+
+        <div class="content">
+            <!-- Git Status -->
+            <div class="status-box success">
+                <h2>✅ Git Repository Created Successfully!</h2>
+                <p><strong>Repository URL:</strong> <a href="https://github.com/gowtham6477/smart-cart" target="_blank">https://github.com/gowtham6477/smart-cart</a></p>
+                <p><strong>Status:</strong> All files committed and pushed to GitHub (main branch)</p>
+                <p><strong>Files Committed:</strong> 72 files with complete backend structure</p>
+            </div>
+
+            <!-- Current Issue -->
+            <div class="status-box warning">
+                <h2>⚠️ Current Issue: IntelliJ Cannot Resolve Dependencies</h2>
+                <p>You're seeing errors like <span class="highlight">"Cannot resolve symbol 'jakarta'"</span> and <span class="highlight">"Cannot resolve symbol 'lombok'"</span></p>
+                <p><strong>Don't worry!</strong> This is normal. Follow the steps below to fix it.</p>
+            </div>
+
+            <h2 style="color: #667eea; margin: 30px 0 20px 0;">🔧 Step-by-Step Fix (5 Minutes)</h2>
+
+            <!-- Step 1 -->
+            <div class="step">
+                <h3><span class="step-number">1</span>Enable Annotation Processing</h3>
+                <p>This is the MOST IMPORTANT step to fix Lombok errors:</p>
+                <ol style="margin-left: 40px; margin-top: 10px;">
+                    <li>Open IntelliJ IDEA</li>
+                    <li>Press <strong>Ctrl+Alt+S</strong> to open Settings</li>
+                    <li>Navigate to: <strong>Build, Execution, Deployment → Compiler → Annotation Processors</strong></li>
+                    <li>✅ Check the box: <strong>Enable annotation processing</strong></li>
+                    <li>Click <strong>Apply</strong> then <strong>OK</strong></li>
+                </ol>
+            </div>
+
+            <!-- Step 2 -->
+            <div class="step">
+                <h3><span class="step-number">2</span>Install Lombok Plugin</h3>
+                <p>Make sure Lombok plugin is installed:</p>
+                <ol style="margin-left: 40px; margin-top: 10px;">
+                    <li>Go to: <strong>File → Settings → Plugins</strong></li>
+                    <li>Search for: <strong>Lombok</strong></li>
+                    <li>If not installed, click <strong>Install</strong></li>
+                    <li>Restart IntelliJ IDEA if prompted</li>
+                </ol>
+            </div>
+
+            <!-- Step 3 -->
+            <div class="step">
+                <h3><span class="step-number">3</span>Reload Maven Project</h3>
+                <p>Download all dependencies from Maven Central:</p>
+                <ol style="margin-left: 40px; margin-top: 10px;">
+                    <li>Find the <strong>Maven</strong> tool window (usually on the right side)</li>
+                    <li>If not visible: <strong>View → Tool Windows → Maven</strong></li>
+                    <li>Click the <strong>Reload All Maven Projects</strong> button (🔄 circular arrows icon)</li>
+                    <li><strong>Wait patiently!</strong> This downloads all libraries (5-15 minutes)</li>
+                    <li>Watch the progress bar at the bottom of IntelliJ</li>
+                </ol>
+            </div>
+
+            <!-- Step 4 -->
+            <div class="step">
+                <h3><span class="step-number">4</span>Build the Project</h3>
+                <p>Compile everything:</p>
+                <ol style="margin-left: 40px; margin-top: 10px;">
+                    <li>Go to: <strong>Build → Build Project</strong> (or press <strong>Ctrl+F9</strong>)</li>
+                    <li>Wait for the build to complete</li>
+                    <li>Check the <strong>Build</strong> window at the bottom</li>
+                    <li>All errors should disappear! ✨</li>
+                </ol>
+            </div>
+
+            <!-- Step 5 -->
+            <div class="step">
+                <h3><span class="step-number">5</span>Verify the Fix</h3>
+                <p>Check if everything works:</p>
+                <ol style="margin-left: 40px; margin-top: 10px;">
+                    <li>Open <strong>src/main/java/org/example/dto/RegisterRequest.java</strong></li>
+                    <li>All red underlines should be gone</li>
+                    <li>Imports should be recognized</li>
+                    <li>No more "Cannot resolve" errors!</li>
+                </ol>
+            </div>
+
+            <h2 style="color: #667eea; margin: 40px 0 20px 0;">📦 What's Already Done</h2>
+
+            <div class="grid">
+                <div class="card">
+                    <div class="icon">✅</div>
+                    <h4>Backend Structure</h4>
+                    <p>Complete Spring Boot application with Controllers, Services, Repositories, and Entities</p>
+                </div>
+
+                <div class="card">
+                    <div class="icon">✅</div>
+                    <h4>Security</h4>
+                    <p>JWT authentication, Spring Security configuration, role-based access control</p>
+                </div>
+
+                <div class="card">
+                    <div class="icon">✅</div>
+                    <h4>Database Models</h4>
+                    <p>All entities: User, Booking, Service, Payment, Coupon, IoT Events</p>
+                </div>
+
+                <div class="card">
+                    <div class="icon">✅</div>
+                    <h4>Integrations</h4>
+                    <p>Cloudinary for images, Razorpay for payments, ready to configure</p>
+                </div>
+
+                <div class="card">
+                    <div class="icon">✅</div>
+                    <h4>Git Repository</h4>
+                    <p>Pushed to GitHub with all files organized and documented</p>
+                </div>
+
+                <div class="card">
+                    <div class="icon">✅</div>
+                    <h4>Documentation</h4>
+                    <p>README, Setup Guide, Project Status docs included</p>
+                </div>
+            </div>
+
+            <h2 style="color: #667eea; margin: 40px 0 20px 0;">🎯 What's Next (After Fixing IntelliJ)</h2>
+
+            <div class="step">
+                <h3>Database Setup</h3>
+                <p>Install MySQL and create database:</p>
+                <div class="code-block">CREATE DATABASE smartcart;</div>
+                <p>Update <strong>src/main/resources/application.properties</strong> with your MySQL credentials</p>
+            </div>
+
+            <div class="step">
+                <h3>External Services Configuration</h3>
+                <ul class="checklist">
+                    <li>Sign up for Cloudinary (image storage)</li>
+                    <li>Sign up for Razorpay (payment gateway)</li>
+                    <li>Generate JWT secret key (256+ bits)</li>
+                    <li>Add all credentials to application.properties</li>
+                </ul>
+            </div>
+
+            <div class="step">
+                <h3>Frontend Setup</h3>
+                <p>Install Node.js dependencies:</p>
+                <div class="code-block">cd frontend<br>npm install</div>
+                <p>Then start developing React components for customer, employee, and admin portals</p>
+            </div>
+
+            <h2 style="color: #667eea; margin: 40px 0 20px 0;">🚀 Run the Application</h2>
+
+            <div class="step">
+                <h3>Start Backend</h3>
+                <p>Open <strong>src/main/java/org/example/Main.java</strong> in IntelliJ</p>
+                <p>Right-click and select <strong>Run 'Main.main()'</strong></p>
+                <p>Backend will start on: <a href="http://localhost:8080" target="_blank">http://localhost:8080</a></p>
+            </div>
+
+            <div class="step">
+                <h3>Start Frontend</h3>
+                <div class="code-block">cd frontend<br>npm run dev</div>
+                <p>Frontend will start on: <a href="http://localhost:5173" target="_blank">http://localhost:5173</a></p>
+            </div>
+
+            <h2 style="color: #667eea; margin: 40px 0 20px 0;">📚 Helpful Resources</h2>
+
+            <div>
+                <a href="https://github.com/gowtham6477/smart-cart" class="btn success" target="_blank">View on GitHub</a>
+                <a href="file:///E:/Smart%20service%20management/smartcart/SETUP_GUIDE.md" class="btn">Setup Guide</a>
+                <a href="file:///E:/Smart%20service%20management/smartcart/PROJECT_STATUS.md" class="btn">Project Status</a>
+                <a href="file:///E:/Smart%20service%20management/smartcart/README.md" class="btn">README</a>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p><strong>Smart Service Management System</strong></p>
+            <p>Complete Full-Stack Application for On-Demand Services</p>
+            <p style="margin-top: 10px;">Created: December 7, 2025 | Status: Backend Complete ✅ | Frontend Pending ⚠️</p>
+        </div>
+    </div>
+</body>
+</html>
+

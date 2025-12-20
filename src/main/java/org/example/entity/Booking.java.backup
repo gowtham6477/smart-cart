@@ -1,0 +1,84 @@
+package org.example.entity;
+
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.mongodb.core.mapping.Document;
+import org.springframework.data.mongodb.core.mapping.DBRef;
+import org.springframework.data.mongodb.core.index.Indexed;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.LocalDateTime;
+
+@Document(collection = "bookings")
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public class Booking {
+
+    @Id
+    private String id;
+
+    @Indexed
+    private String bookingNumber;
+
+    @DBRef
+    @Indexed
+    private User customer;
+
+    @DBRef
+    @Indexed
+    private org.example.entity.Service service;
+
+    @DBRef
+    private ServicePackage servicePackage;
+
+    @DBRef
+    @Indexed
+    private User employee;
+
+    private LocalDate serviceDate;
+    private LocalTime serviceTime;
+    private String serviceAddress;
+    private String city;
+    private String pincode;
+    private String customerNote;
+
+    private Double originalPrice;
+    private BigDecimal discount = BigDecimal.ZERO;
+    private Double finalPrice;
+
+    @DBRef
+    private Coupon coupon;
+
+    @Indexed
+    private BookingStatus status = BookingStatus.PENDING;
+
+    private String cancellationReason;
+    private Integer rating;
+    private String feedback;
+    private LocalDateTime completedAt;
+
+    @CreatedDate
+    private LocalDateTime createdAt;
+
+    @LastModifiedDate
+    private LocalDateTime updatedAt;
+
+    public enum BookingStatus {
+        PENDING,
+        CONFIRMED,
+        ASSIGNED,
+        ACCEPTED,
+        ON_THE_WAY,
+        IN_PROGRESS,
+        COMPLETED,
+        CANCELLED
+    }
+}
+

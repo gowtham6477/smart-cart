@@ -45,7 +45,7 @@ public class AdminController {
 
     @PutMapping("/services/{id}")
     public ResponseEntity<ApiResponse<Service>> updateService(
-            @PathVariable Long id,
+            @PathVariable String id,
             @Valid @RequestBody ServiceRequest request) {
         try {
             Service service = serviceManagementService.updateService(id, request);
@@ -56,7 +56,7 @@ public class AdminController {
     }
 
     @DeleteMapping("/services/{id}")
-    public ResponseEntity<ApiResponse<Void>> deleteService(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<Void>> deleteService(@PathVariable String id) {
         try {
             serviceManagementService.deleteService(id);
             return ResponseEntity.ok(ApiResponse.success("Service deleted successfully", null));
@@ -85,7 +85,7 @@ public class AdminController {
 
     @PutMapping("/packages/{id}")
     public ResponseEntity<ApiResponse<ServicePackage>> updatePackage(
-            @PathVariable Long id,
+            @PathVariable String id,
             @Valid @RequestBody ServicePackageRequest request) {
         try {
             ServicePackage pkg = serviceManagementService.updatePackage(id, request);
@@ -96,7 +96,7 @@ public class AdminController {
     }
 
     @DeleteMapping("/packages/{id}")
-    public ResponseEntity<ApiResponse<Void>> deletePackage(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<Void>> deletePackage(@PathVariable String id) {
         try {
             serviceManagementService.deletePackage(id);
             return ResponseEntity.ok(ApiResponse.success("Package deleted successfully", null));
@@ -124,7 +124,7 @@ public class AdminController {
 
     @PutMapping("/employees/{id}")
     public ResponseEntity<ApiResponse<User>> updateEmployee(
-            @PathVariable Long id,
+            @PathVariable String id,
             @RequestBody User employee) {
         try {
             User updated = employeeService.updateEmployee(id, employee);
@@ -143,8 +143,8 @@ public class AdminController {
 
     @PostMapping("/bookings/{bookingId}/assign/{employeeId}")
     public ResponseEntity<ApiResponse<BookingResponse>> assignEmployee(
-            @PathVariable Long bookingId,
-            @PathVariable Long employeeId) {
+            @PathVariable String bookingId,
+            @PathVariable String employeeId) {
         try {
             BookingResponse booking = bookingService.assignEmployee(bookingId, employeeId);
             return ResponseEntity.ok(ApiResponse.success("Employee assigned successfully", booking));
@@ -172,7 +172,7 @@ public class AdminController {
 
     @PutMapping("/coupons/{id}")
     public ResponseEntity<ApiResponse<Coupon>> updateCoupon(
-            @PathVariable Long id,
+            @PathVariable String id,
             @Valid @RequestBody CouponRequest request) {
         try {
             Coupon coupon = couponService.updateCoupon(id, request);
@@ -183,7 +183,7 @@ public class AdminController {
     }
 
     @DeleteMapping("/coupons/{id}")
-    public ResponseEntity<ApiResponse<Void>> deleteCoupon(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<Void>> deleteCoupon(@PathVariable String id) {
         try {
             couponService.deleteCoupon(id);
             return ResponseEntity.ok(ApiResponse.success("Coupon deleted successfully", null));

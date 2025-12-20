@@ -9,16 +9,16 @@ import java.time.LocalTime;
 
 @Data
 public class BookingResponse {
-    private Long id;
+    private String id;
     private String bookingNumber;
-    private Long customerId;
+    private String customerId;
     private String customerName;
     private String customerMobile;
-    private Long serviceId;
+    private String serviceId;
     private String serviceName;
-    private Long packageId;
+    private String packageId;
     private String packageName;
-    private Long employeeId;
+    private String employeeId;
     private String employeeName;
     private String employeeMobile;
     private LocalDate serviceDate;
@@ -27,9 +27,9 @@ public class BookingResponse {
     private String city;
     private String pincode;
     private String customerNote;
-    private BigDecimal originalPrice;
+    private Double originalPrice;
     private BigDecimal discount;
-    private BigDecimal finalPrice;
+    private Double finalPrice;
     private String couponCode;
     private String status;
     private Integer rating;

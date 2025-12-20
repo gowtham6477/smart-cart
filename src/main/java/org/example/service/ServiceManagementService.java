@@ -9,6 +9,7 @@ import org.example.repository.ServiceRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @org.springframework.stereotype.Service
@@ -28,13 +29,13 @@ public class ServiceManagementService {
         return serviceRepository.findByActiveTrue();
     }
 
-    public Service getServiceById(Long id) {
+    public Service getServiceById(String id) {
         return serviceRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Service not found with id: " + id));
     }
 
     public List<Service> getServicesByCategory(String category) {
-        return serviceRepository.findByCategoryAndActiveTrue(category);
+        return serviceRepository.findByCategoryAndActiveTrue(category, true);
     }
 
     @Transactional
@@ -49,63 +50,68 @@ public class ServiceManagementService {
     }
 
     @Transactional
-    public Service updateService(Long id, ServiceRequest request) {
+    public Service updateService(String id, ServiceRequest request) {
         Service service = getServiceById(id);
         service.setName(request.getName());
         service.setDescription(request.getDescription());
         service.setCategory(request.getCategory());
         service.setImageUrl(request.getImageUrl());
         service.setActive(request.getActive());
+        service.setUpdatedAt(LocalDateTime.now());
         return serviceRepository.save(service);
     }
 
     @Transactional
-    public void deleteService(Long id) {
+    public void deleteService(String id) {
         serviceRepository.deleteById(id);
     }
 
     // Package Management
-    public List<ServicePackage> getPackagesByServiceId(Long serviceId) {
-        return packageRepository.findByServiceIdAndActiveTrue(serviceId);
+    public List<ServicePackage> getPackagesByServiceId(String serviceId) {
+        return packageRepository.findByServiceIdAndActiveTrue(serviceId, true);
     }
 
-    public ServicePackage getPackageById(Long id) {
+    public ServicePackage getPackageById(String id) {
         return packageRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Package not found with id: " + id));
     }
 
     @Transactional
     public ServicePackage createPackage(ServicePackageRequest request) {
-        Service service = getServiceById(request.getServiceId());
+        // Verify service exists
+        getServiceById(request.getServiceId());
 
         ServicePackage pkg = new ServicePackage();
-        pkg.setService(service);
+        pkg.setServiceId(request.getServiceId());
         pkg.setName(request.getName());
         pkg.setDescription(request.getDescription());
         pkg.setPrice(request.getPrice());
-        pkg.setDurationMinutes(request.getDurationMinutes());
+        pkg.setDuration(request.getDurationMinutes());
         pkg.setActive(request.getActive());
 
         return packageRepository.save(pkg);
     }
 
     @Transactional
-    public ServicePackage updatePackage(Long id, ServicePackageRequest request) {
+    public ServicePackage updatePackage(String id, ServicePackageRequest request) {
         ServicePackage pkg = getPackageById(id);
-        Service service = getServiceById(request.getServiceId());
 
-        pkg.setService(service);
+        // Verify service exists
+        getServiceById(request.getServiceId());
+
+        pkg.setServiceId(request.getServiceId());
         pkg.setName(request.getName());
         pkg.setDescription(request.getDescription());
         pkg.setPrice(request.getPrice());
-        pkg.setDurationMinutes(request.getDurationMinutes());
+        pkg.setDuration(request.getDurationMinutes());
         pkg.setActive(request.getActive());
+        pkg.setUpdatedAt(LocalDateTime.now());
 
         return packageRepository.save(pkg);
     }
 
     @Transactional
-    public void deletePackage(Long id) {
+    public void deletePackage(String id) {
         packageRepository.deleteById(id);
     }
 }

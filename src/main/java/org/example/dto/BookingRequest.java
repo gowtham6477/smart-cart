@@ -9,10 +9,10 @@ import java.time.LocalTime;
 @Data
 public class BookingRequest {
     @NotNull(message = "Service ID is required")
-    private Long serviceId;
+    private String serviceId;
 
     @NotNull(message = "Package ID is required")
-    private Long packageId;
+    private String packageId;
 
     @NotNull(message = "Service date is required")
     private LocalDate serviceDate;

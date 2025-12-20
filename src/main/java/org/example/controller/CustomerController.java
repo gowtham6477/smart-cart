@@ -4,6 +4,7 @@ import jakarta.validation.Valid;
 import org.example.dto.ApiResponse;
 import org.example.dto.BookingRequest;
 import org.example.dto.BookingResponse;
+import org.example.dto.PaymentRequest;
 import org.example.entity.Payment;
 import org.example.security.JwtUtil;
 import org.example.service.BookingService;
@@ -41,7 +42,7 @@ public class CustomerController {
             @Valid @RequestBody BookingRequest request,
             @RequestHeader("Authorization") String token) {
         try {
-            Long customerId = extractUserIdFromToken(token);
+            String customerId = extractUserIdFromToken(token);
             BookingResponse booking = bookingService.createBooking(request, customerId);
             return ResponseEntity.ok(ApiResponse.success("Booking created successfully", booking));
         } catch (Exception e) {
@@ -52,13 +53,13 @@ public class CustomerController {
     @GetMapping("/bookings")
     public ResponseEntity<ApiResponse<List<BookingResponse>>> getMyBookings(
             @RequestHeader("Authorization") String token) {
-        Long customerId = extractUserIdFromToken(token);
+        String customerId = extractUserIdFromToken(token);
         List<BookingResponse> bookings = bookingService.getCustomerBookings(customerId);
         return ResponseEntity.ok(ApiResponse.success("Bookings retrieved successfully", bookings));
     }
 
     @GetMapping("/bookings/{id}")
-    public ResponseEntity<ApiResponse<BookingResponse>> getBookingById(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<BookingResponse>> getBookingById(@PathVariable String id) {
         try {
             BookingResponse booking = bookingService.getBookingById(id);
             return ResponseEntity.ok(ApiResponse.success("Booking retrieved successfully", booking));
@@ -69,7 +70,7 @@ public class CustomerController {
 
     @PostMapping("/bookings/{id}/feedback")
     public ResponseEntity<ApiResponse<BookingResponse>> addFeedback(
-            @PathVariable Long id,
+            @PathVariable String id,
             @RequestBody Map<String, Object> feedback) {
         try {
             Integer rating = (Integer) feedback.get("rating");
@@ -82,9 +83,9 @@ public class CustomerController {
     }
 
     @PostMapping("/payments/create-order")
-    public ResponseEntity<ApiResponse<Payment>> createPaymentOrder(@RequestBody Map<String, Long> request) {
+    public ResponseEntity<ApiResponse<Payment>> createPaymentOrder(@RequestBody Map<String, String> request) {
         try {
-            Long bookingId = request.get("bookingId");
+            String bookingId = request.get("bookingId");
             Payment payment = paymentService.createPaymentOrder(bookingId);
             return ResponseEntity.ok(ApiResponse.success("Payment order created", payment));
         } catch (Exception e) {
@@ -93,13 +94,9 @@ public class CustomerController {
     }
 
     @PostMapping("/payments/verify")
-    public ResponseEntity<ApiResponse<Payment>> verifyPayment(@RequestBody Map<String, String> request) {
+    public ResponseEntity<ApiResponse<Payment>> verifyPayment(@RequestBody PaymentRequest request) {
         try {
-            Payment payment = paymentService.verifyAndUpdatePayment(
-                    request.get("razorpayOrderId"),
-                    request.get("razorpayPaymentId"),
-                    request.get("razorpaySignature")
-            );
+            Payment payment = paymentService.verifyPayment(request);
             return ResponseEntity.ok(ApiResponse.success("Payment verified successfully", payment));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
@@ -110,7 +107,7 @@ public class CustomerController {
     public ResponseEntity<ApiResponse<BigDecimal>> validateCoupon(@RequestBody Map<String, Object> request) {
         try {
             String code = (String) request.get("code");
-            BigDecimal amount = new BigDecimal(request.get("amount").toString());
+            Double amount = Double.parseDouble(request.get("amount").toString());
             BigDecimal discount = couponService.validateCoupon(code, amount);
             return ResponseEntity.ok(ApiResponse.success("Coupon is valid", discount));
         } catch (Exception e) {
@@ -118,9 +115,10 @@ public class CustomerController {
         }
     }
 
-    private Long extractUserIdFromToken(String token) {
-        // This is a simplified version. In real implementation, store userId in JWT
-        return 1L;
+    private String extractUserIdFromToken(String token) {
+        // This is a simplified version. In real implementation, extract userId from JWT
+        // For now, return a test ID
+        return "test-customer-id";
     }
 }
 

@@ -9,7 +9,7 @@ import java.math.BigDecimal;
 @Data
 public class ServicePackageRequest {
     @NotNull(message = "Service ID is required")
-    private Long serviceId;
+    private String serviceId;
 
     @NotBlank(message = "Package name is required")
     private String name;
@@ -17,7 +17,7 @@ public class ServicePackageRequest {
     private String description;
 
     @NotNull(message = "Price is required")
-    private BigDecimal price;
+    private Double price;
 
     private Integer durationMinutes;
     private Boolean active = true;

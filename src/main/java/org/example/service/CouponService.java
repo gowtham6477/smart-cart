@@ -8,7 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -22,22 +22,22 @@ public class CouponService {
     }
 
     public List<Coupon> getActiveCoupons() {
-        return couponRepository.findByActiveTrue();
+        return couponRepository.findByActive(true);
     }
 
-    public Coupon getCouponById(Long id) {
-        return couponRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Coupon not found with id: " + id));
+    public Coupon getCouponById(String couponId) {
+        return couponRepository.findById(couponId)
+                .orElseThrow(() -> new RuntimeException("Coupon not found"));
     }
 
     public Coupon getCouponByCode(String code) {
         return couponRepository.findByCode(code)
-                .orElseThrow(() -> new RuntimeException("Coupon not found with code: " + code));
+                .orElseThrow(() -> new RuntimeException("Coupon not found"));
     }
 
     @Transactional
     public Coupon createCoupon(CouponRequest request) {
-        if (couponRepository.findByCode(request.getCode()).isPresent()) {
+        if (couponRepository.existsByCode(request.getCode())) {
             throw new RuntimeException("Coupon code already exists");
         }
 
@@ -58,8 +58,8 @@ public class CouponService {
     }
 
     @Transactional
-    public Coupon updateCoupon(Long id, CouponRequest request) {
-        Coupon coupon = getCouponById(id);
+    public Coupon updateCoupon(String couponId, CouponRequest request) {
+        Coupon coupon = getCouponById(couponId);
 
         coupon.setDescription(request.getDescription());
         coupon.setDiscountType(Coupon.DiscountType.valueOf(request.getDiscountType().toUpperCase()));
@@ -70,45 +70,51 @@ public class CouponService {
         coupon.setValidUntil(request.getValidUntil());
         coupon.setUsageLimit(request.getUsageLimit());
         coupon.setActive(request.getActive());
+        coupon.setUpdatedAt(LocalDateTime.now());
 
         return couponRepository.save(coupon);
     }
 
     @Transactional
-    public void deleteCoupon(Long id) {
-        couponRepository.deleteById(id);
+    public void deleteCoupon(String couponId) {
+        if (!couponRepository.existsById(couponId)) {
+            throw new RuntimeException("Coupon not found");
+        }
+        couponRepository.deleteById(couponId);
     }
 
-    public BigDecimal applyCoupon(String code, BigDecimal orderAmount) {
-        Coupon coupon = getCouponByCode(code);
+    @Transactional
+    public BigDecimal applyCoupon(String code, Double orderAmount) {
+        Coupon coupon = couponRepository.findByCode(code)
+                .orElseThrow(() -> new RuntimeException("Invalid coupon code"));
 
         // Validate coupon
         if (!coupon.getActive()) {
             throw new RuntimeException("Coupon is not active");
         }
 
-        LocalDate today = LocalDate.now();
-        if (today.isBefore(coupon.getValidFrom()) || today.isAfter(coupon.getValidUntil())) {
-            throw new RuntimeException("Coupon is not valid for current date");
+        LocalDateTime now = LocalDateTime.now();
+        if (now.isBefore(coupon.getValidFrom()) || now.isAfter(coupon.getValidUntil())) {
+            throw new RuntimeException("Coupon is not valid at this time");
         }
 
         if (coupon.getUsedCount() >= coupon.getUsageLimit()) {
             throw new RuntimeException("Coupon usage limit exceeded");
         }
 
-        if (coupon.getMinOrderValue() != null && orderAmount.compareTo(coupon.getMinOrderValue()) < 0) {
-            throw new RuntimeException("Minimum order value not met for this coupon");
+        if (orderAmount < coupon.getMinOrderValue()) {
+            throw new RuntimeException("Minimum order value not met. Required: ₹" + coupon.getMinOrderValue());
         }
 
         // Calculate discount
         BigDecimal discount;
         if (coupon.getDiscountType() == Coupon.DiscountType.PERCENTAGE) {
-            discount = orderAmount.multiply(coupon.getDiscountValue()).divide(BigDecimal.valueOf(100));
-            if (coupon.getMaxDiscountAmount() != null && discount.compareTo(coupon.getMaxDiscountAmount()) > 0) {
-                discount = coupon.getMaxDiscountAmount();
+            discount = BigDecimal.valueOf(orderAmount * coupon.getDiscountValue() / 100);
+            if (coupon.getMaxDiscountAmount() != null && discount.doubleValue() > coupon.getMaxDiscountAmount()) {
+                discount = BigDecimal.valueOf(coupon.getMaxDiscountAmount());
             }
         } else {
-            discount = coupon.getDiscountValue();
+            discount = BigDecimal.valueOf(coupon.getDiscountValue());
         }
 
         // Increment usage count
@@ -118,37 +124,33 @@ public class CouponService {
         return discount;
     }
 
-    public BigDecimal validateCoupon(String code, BigDecimal orderAmount) {
-        Coupon coupon = getCouponByCode(code);
+    public BigDecimal validateCoupon(String code, Double orderAmount) {
+        Coupon coupon = couponRepository.findByCode(code)
+                .orElseThrow(() -> new RuntimeException("Invalid coupon code"));
 
         if (!coupon.getActive()) {
             throw new RuntimeException("Coupon is not active");
         }
 
-        LocalDate today = LocalDate.now();
-        if (today.isBefore(coupon.getValidFrom()) || today.isAfter(coupon.getValidUntil())) {
-            throw new RuntimeException("Coupon is not valid for current date");
+        LocalDateTime now = LocalDateTime.now();
+        if (now.isBefore(coupon.getValidFrom()) || now.isAfter(coupon.getValidUntil())) {
+            throw new RuntimeException("Coupon is not valid at this time");
         }
 
-        if (coupon.getUsedCount() >= coupon.getUsageLimit()) {
-            throw new RuntimeException("Coupon usage limit exceeded");
+        if (orderAmount < coupon.getMinOrderValue()) {
+            throw new RuntimeException("Minimum order value not met");
         }
 
-        if (coupon.getMinOrderValue() != null && orderAmount.compareTo(coupon.getMinOrderValue()) < 0) {
-            throw new RuntimeException("Minimum order value not met. Required: " + coupon.getMinOrderValue());
-        }
-
-        BigDecimal discount;
+        // Calculate potential discount without applying
         if (coupon.getDiscountType() == Coupon.DiscountType.PERCENTAGE) {
-            discount = orderAmount.multiply(coupon.getDiscountValue()).divide(BigDecimal.valueOf(100));
-            if (coupon.getMaxDiscountAmount() != null && discount.compareTo(coupon.getMaxDiscountAmount()) > 0) {
-                discount = coupon.getMaxDiscountAmount();
+            BigDecimal discount = BigDecimal.valueOf(orderAmount * coupon.getDiscountValue() / 100);
+            if (coupon.getMaxDiscountAmount() != null && discount.doubleValue() > coupon.getMaxDiscountAmount()) {
+                return BigDecimal.valueOf(coupon.getMaxDiscountAmount());
             }
+            return discount;
         } else {
-            discount = coupon.getDiscountValue();
+            return BigDecimal.valueOf(coupon.getDiscountValue());
         }
-
-        return discount;
     }
 }
 

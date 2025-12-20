@@ -43,7 +43,7 @@ public class EmployeeController {
     @GetMapping("/bookings")
     public ResponseEntity<ApiResponse<List<BookingResponse>>> getMyBookings(
             @RequestHeader("Authorization") String token) {
-        Long employeeId = extractEmployeeIdFromToken(token);
+        String employeeId = extractEmployeeIdFromToken(token);
         List<BookingResponse> bookings = bookingService.getEmployeeBookings(employeeId);
         return ResponseEntity.ok(ApiResponse.success("Bookings retrieved successfully", bookings));
     }
@@ -51,7 +51,7 @@ public class EmployeeController {
     @GetMapping("/bookings/today")
     public ResponseEntity<ApiResponse<List<BookingResponse>>> getTodayBookings(
             @RequestHeader("Authorization") String token) {
-        Long employeeId = extractEmployeeIdFromToken(token);
+        String employeeId = extractEmployeeIdFromToken(token);
         List<BookingResponse> bookings = bookingService.getEmployeeBookings(employeeId);
         // Filter today's bookings
         List<BookingResponse> todayBookings = bookings.stream()
@@ -62,7 +62,7 @@ public class EmployeeController {
 
     @PutMapping("/bookings/{id}/status")
     public ResponseEntity<ApiResponse<BookingResponse>> updateBookingStatus(
-            @PathVariable Long id,
+            @PathVariable String id,
             @RequestBody Map<String, String> request) {
         try {
             String status = request.get("status");
@@ -75,15 +75,18 @@ public class EmployeeController {
 
     @PostMapping("/bookings/{id}/images")
     public ResponseEntity<ApiResponse<String>> uploadImage(
-            @PathVariable Long id,
+            @PathVariable String id,
             @RequestParam("file") MultipartFile file,
             @RequestParam("type") String type) {
         try {
+            // Verify booking exists
+            bookingRepository.findById(id)
+                    .orElseThrow(() -> new RuntimeException("Booking not found"));
+
             String imageUrl = cloudinaryService.uploadImage(file);
 
             BookingImage bookingImage = new BookingImage();
-            bookingImage.setBooking(bookingRepository.findById(id)
-                    .orElseThrow(() -> new RuntimeException("Booking not found")));
+            bookingImage.setBookingId(id);
             bookingImage.setImageUrl(imageUrl);
             bookingImage.setImageType(BookingImage.ImageType.valueOf(type.toUpperCase()));
 
@@ -99,7 +102,7 @@ public class EmployeeController {
     public ResponseEntity<ApiResponse<EmployeeAttendance>> checkIn(
             @RequestHeader("Authorization") String token) {
         try {
-            Long employeeId = extractEmployeeIdFromToken(token);
+            String employeeId = extractEmployeeIdFromToken(token);
             EmployeeAttendance attendance = employeeService.markAttendance(employeeId);
             return ResponseEntity.ok(ApiResponse.success("Check-in successful", attendance));
         } catch (Exception e) {
@@ -111,7 +114,7 @@ public class EmployeeController {
     public ResponseEntity<ApiResponse<EmployeeAttendance>> checkOut(
             @RequestHeader("Authorization") String token) {
         try {
-            Long employeeId = extractEmployeeIdFromToken(token);
+            String employeeId = extractEmployeeIdFromToken(token);
             EmployeeAttendance attendance = employeeService.markCheckOut(employeeId);
             return ResponseEntity.ok(ApiResponse.success("Check-out successful", attendance));
         } catch (Exception e) {
@@ -119,9 +122,9 @@ public class EmployeeController {
         }
     }
 
-    private Long extractEmployeeIdFromToken(String token) {
+    private String extractEmployeeIdFromToken(String token) {
         // Simplified - in real implementation extract from JWT
-        return 1L;
+        return "test-employee-id";
     }
 }
 

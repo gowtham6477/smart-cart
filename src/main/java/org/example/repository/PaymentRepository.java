@@ -1,25 +1,30 @@
 package org.example.repository;
 
 import org.example.entity.Payment;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
+import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.stereotype.Repository;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
 @Repository
-public interface PaymentRepository extends JpaRepository<Payment, Long> {
-    Optional<Payment> findByBookingId(Long bookingId);
+public interface PaymentRepository extends MongoRepository<Payment, String> {
+
+    Optional<Payment> findByBookingId(String bookingId);
+
+    List<Payment> findByCustomerId(String customerId);
+
     Optional<Payment> findByRazorpayOrderId(String razorpayOrderId);
+
     Optional<Payment> findByRazorpayPaymentId(String razorpayPaymentId);
+
     List<Payment> findByStatus(Payment.PaymentStatus status);
 
-    @Query("SELECT SUM(p.amount) FROM Payment p WHERE p.status = 'SUCCESS' AND p.paidAt BETWEEN :startDate AND :endDate")
-    BigDecimal getTotalRevenueBetweenDates(@Param("startDate") LocalDateTime startDate,
-                                             @Param("endDate") LocalDateTime endDate);
+    List<Payment> findByCreatedAtBetween(LocalDateTime start, LocalDateTime end);
+
+    Long countByStatus(Payment.PaymentStatus status);
+
+    Long countByStatusAndCreatedAtBetween(Payment.PaymentStatus status, LocalDateTime start, LocalDateTime end);
 }
 

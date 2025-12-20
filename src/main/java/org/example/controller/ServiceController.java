@@ -25,7 +25,7 @@ public class ServiceController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<ApiResponse<Service>> getServiceById(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<Service>> getServiceById(@PathVariable String id) {
         try {
             Service service = serviceManagementService.getServiceById(id);
             return ResponseEntity.ok(ApiResponse.success("Service retrieved successfully", service));
@@ -41,7 +41,7 @@ public class ServiceController {
     }
 
     @GetMapping("/{serviceId}/packages")
-    public ResponseEntity<ApiResponse<List<ServicePackage>>> getPackages(@PathVariable Long serviceId) {
+    public ResponseEntity<ApiResponse<List<ServicePackage>>> getPackages(@PathVariable String serviceId) {
         List<ServicePackage> packages = serviceManagementService.getPackagesByServiceId(serviceId);
         return ResponseEntity.ok(ApiResponse.success("Packages retrieved successfully", packages));
     }
