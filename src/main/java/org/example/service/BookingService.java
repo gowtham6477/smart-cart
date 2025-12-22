@@ -37,14 +37,65 @@ public class BookingService {
 
     @Transactional
     public BookingResponse createBooking(BookingRequest request, String customerId) {
+        System.out.println("=== Creating Booking ===");
+        System.out.println("Customer ID: " + customerId);
+        System.out.println("Service ID: " + request.getServiceId());
+        System.out.println("Package ID: '" + request.getPackageId() + "'");
+        System.out.println("Package ID is null: " + (request.getPackageId() == null));
+        if (request.getPackageId() != null) {
+            System.out.println("Package ID length: " + request.getPackageId().length());
+            System.out.println("Package ID trimmed: '" + request.getPackageId().trim() + "'");
+        }
+
         User customer = userRepository.findById(customerId)
                 .orElseThrow(() -> new RuntimeException("Customer not found"));
 
         org.example.entity.Service service = serviceRepository.findById(request.getServiceId())
                 .orElseThrow(() -> new RuntimeException("Service not found"));
 
-        ServicePackage servicePackage = packageRepository.findById(request.getPackageId())
-                .orElseThrow(() -> new RuntimeException("Package not found"));
+        ServicePackage servicePackage;
+
+        // If packageId is not provided, find or create a default package
+        if (request.getPackageId() == null || request.getPackageId().trim().isEmpty()) {
+            System.out.println("No package ID provided, finding or creating default package");
+            // Try to find existing default package for this service
+            List<ServicePackage> existingPackages = packageRepository.findByServiceId(request.getServiceId());
+
+            if (!existingPackages.isEmpty()) {
+                // Use the first available package
+                servicePackage = existingPackages.get(0);
+                System.out.println("Using existing package: " + servicePackage.getId());
+            } else {
+                // Create a default "Standard" package
+                System.out.println("Creating new default package");
+                servicePackage = new ServicePackage();
+                servicePackage.setServiceId(service.getId());
+                servicePackage.setName("Standard");
+                servicePackage.setDescription("Standard service package");
+                servicePackage.setPrice(service.getBasePrice() != null ? service.getBasePrice() : 0.0);
+                servicePackage.setDuration(60); // Default 1 hour
+                servicePackage.setActive(true);
+                servicePackage = packageRepository.save(servicePackage);
+                System.out.println("Created new package: " + servicePackage.getId());
+            }
+        } else {
+            // Use the provided package ID - validate it's not empty
+            String trimmedPackageId = request.getPackageId().trim();
+            System.out.println("Looking up package with ID: " + trimmedPackageId);
+
+            if (trimmedPackageId.isEmpty()) {
+                throw new RuntimeException("Package ID cannot be empty");
+            }
+
+            try {
+                servicePackage = packageRepository.findById(trimmedPackageId)
+                        .orElseThrow(() -> new RuntimeException("Package not found with ID: " + trimmedPackageId));
+                System.out.println("Found package: " + servicePackage.getName());
+            } catch (IllegalArgumentException e) {
+                System.err.println("Invalid package ID format: " + trimmedPackageId);
+                throw new RuntimeException("Invalid package ID format: " + trimmedPackageId);
+            }
+        }
 
         Booking booking = new Booking();
         booking.setBookingNumber("BKG" + UUID.randomUUID().toString().substring(0, 8).toUpperCase());

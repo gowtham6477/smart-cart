@@ -19,7 +19,7 @@ const FEATURES = [
   {
     icon: Truck,
     title: 'Fast Shipping',
-    description: 'Free shipping on orders over $50, delivered to your doorstep'
+    description: 'Quick and reliable delivery to your doorstep'
   },
   {
     icon: HeadphonesIcon,

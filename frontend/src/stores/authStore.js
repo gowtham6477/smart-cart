@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { authAPI } from '../services/api';
+import useCartStore from './cartStore';
 
 const useAuthStore = create(
   persist(
@@ -65,6 +66,7 @@ const useAuthStore = create(
       // Logout
       logout: () => {
         authAPI.logout();
+        useCartStore.getState().resetCart(); // Reset cart on logout
         set({
           user: null,
           accessToken: null,
@@ -78,12 +80,32 @@ const useAuthStore = create(
         const userStr = localStorage.getItem('user');
 
         if (token && userStr) {
-          const user = JSON.parse(userStr);
-          set({
-            user,
-            accessToken: token,
-            isAuthenticated: true,
-          });
+          try {
+            const user = JSON.parse(userStr);
+
+            // Check if token has userId - if not, force logout for token refresh
+            if (!user.userId) {
+              console.warn('Old token detected without userId. Please log in again.');
+              localStorage.removeItem('accessToken');
+              localStorage.removeItem('user');
+              set({
+                user: null,
+                accessToken: null,
+                isAuthenticated: false,
+              });
+              return;
+            }
+
+            set({
+              user,
+              accessToken: token,
+              isAuthenticated: true,
+            });
+          } catch (error) {
+            console.error('Error parsing user data:', error);
+            localStorage.removeItem('accessToken');
+            localStorage.removeItem('user');
+          }
         }
       },
 

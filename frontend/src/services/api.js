@@ -35,6 +35,13 @@ export const customerAPI = {
 
   // Coupons
   validateCoupon: (code, amount) => apiClient.post('/customer/coupons/validate', { code, amount }),
+
+  // Cart
+  getCart: () => apiClient.get('/customer/cart'),
+  addToCart: (item) => apiClient.post('/customer/cart/add', item),
+  removeFromCart: (serviceId) => apiClient.delete(`/customer/cart/remove/${serviceId}`),
+  updateCartQuantity: (serviceId, quantity) => apiClient.put('/customer/cart/update', { serviceId, quantity }),
+  clearCart: () => apiClient.delete('/customer/cart/clear'),
 };
 
 // Employee APIs

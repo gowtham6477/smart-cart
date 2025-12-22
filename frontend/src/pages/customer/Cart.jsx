@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Trash2, Minus, Plus, ShoppingBag, Loader2 } from 'lucide-react';
 import useCartStore from '../../stores/cartStore';
@@ -8,11 +8,55 @@ import toast from 'react-hot-toast';
 
 export default function Cart() {
   const navigate = useNavigate();
-  const { items, updateQuantity, removeItem, clearCart, getTotal } = useCartStore();
+  const { items, updateQuantity, removeItem, clearCart, getTotal, loading: cartLoading, initCart } = useCartStore();
   const { user, isAuthenticated } = useAuthStore();
   const [loading, setLoading] = useState(false);
+  const [couponCode, setCouponCode] = useState('');
+  const [couponDiscount, setCouponDiscount] = useState(0);
+  const [appliedCoupon, setAppliedCoupon] = useState(null);
+  const [validatingCoupon, setValidatingCoupon] = useState(false);
 
   const total = useMemo(() => getTotal(), [items, getTotal]);
+
+  // Initialize cart on component mount
+  useEffect(() => {
+    if (isAuthenticated) {
+      initCart();
+    }
+  }, [isAuthenticated, initCart]);
+
+  const handleApplyCoupon = async () => {
+    if (!couponCode.trim()) {
+      toast.error('Please enter a coupon code');
+      return;
+    }
+
+    setValidatingCoupon(true);
+    try {
+      const response = await customerAPI.validateCoupon(couponCode.toUpperCase(), total);
+      const discount = response.data.data;
+
+      setCouponDiscount(Number(discount) || 0);
+      setAppliedCoupon(couponCode.toUpperCase());
+      toast.success(`Coupon applied! You saved $${Number(discount).toFixed(2)}`);
+    } catch (error) {
+      const errorMsg = error?.response?.data?.message || 'Invalid coupon code';
+      toast.error(errorMsg);
+      setCouponDiscount(0);
+      setAppliedCoupon(null);
+    } finally {
+      setValidatingCoupon(false);
+    }
+  };
+
+  const handleRemoveCoupon = () => {
+    setCouponCode('');
+    setCouponDiscount(0);
+    setAppliedCoupon(null);
+    toast.success('Coupon removed');
+  };
+
+  const finalTotal = Math.max(0, total - couponDiscount);
 
   const handleCheckout = async () => {
     if (!isAuthenticated) {
@@ -33,38 +77,55 @@ export default function Cart() {
       const bookingPromises = items.map(async (item) => {
         try {
           // Get packages for this service
-          const packagesRes = await servicesAPI.getPackages(item.id);
-          const packages = packagesRes.data.data || [];
+          const packagesRes = await servicesAPI.getPackages(item.serviceId);
+          let packages = packagesRes.data.data || [];
 
+          // If no packages exist, get service details
+          let selectedPackage;
           if (!packages.length) {
-            throw new Error(`No packages available for ${item.name}`);
-          }
+            const serviceRes = await servicesAPI.getById(item.serviceId);
+            const service = serviceRes.data.data;
 
-          // Use the first package (Standard)
-          const selectedPackage = packages[0];
+            selectedPackage = {
+              id: null,
+              name: 'Standard',
+              price: service.basePrice || item.price || 0,
+              description: 'Standard package'
+            };
+          } else {
+            selectedPackage = packages[0];
+          }
 
           // Create booking with default schedule (tomorrow at 10 AM)
           const tomorrow = new Date();
           tomorrow.setDate(tomorrow.getDate() + 1);
 
           const bookingData = {
-            serviceId: item.id,
-            packageId: selectedPackage.id,
-            serviceDate: tomorrow.toISOString().split('T')[0], // YYYY-MM-DD
-            serviceTime: '10:00', // HH:mm format
+            serviceId: item.serviceId,
+            packageId: selectedPackage.id || null,
+            serviceDate: tomorrow.toISOString().split('T')[0],
+            serviceTime: '10:00',
             serviceAddress: user.address || '123 Main Street',
             city: user.city || 'Default City',
             pincode: user.pincode || '000000',
             customerNote: `Order from cart - Quantity: ${item.quantity}`,
-            couponCode: null
+            couponCode: appliedCoupon || null,
           };
+
+          if (!bookingData.packageId) {
+            delete bookingData.packageId;
+          }
 
           console.log('Creating booking:', bookingData);
           const response = await customerAPI.createBooking(bookingData);
           console.log('Booking created successfully:', response.data);
+
+          // Remove from cart after successful booking
+          await removeItem(item.serviceId);
+
           return response;
         } catch (err) {
-          console.error(`Failed to create booking for ${item.name}:`, err);
+          console.error(`Failed to create booking for ${item.serviceName}:`, err);
           console.error('Error details:', err.response?.data);
           throw err;
         }
@@ -85,13 +146,13 @@ export default function Cart() {
       if (failed.length > 0) {
         // Some succeeded, some failed
         toast.success(`${successful.length} order(s) placed successfully`);
-        toast.error(`${failed.length} order(s) failed`);
+        toast.error(`${failed.length} order(s) failed - still in cart`);
       } else {
         // All succeeded
         toast.success(`Successfully placed ${successful.length} order(s)!`);
       }
 
-      clearCart();
+      // Navigate to orders page if at least one succeeded
       navigate('/my/orders');
     } catch (error) {
       console.error('Checkout failed:', error);
@@ -124,39 +185,39 @@ export default function Cart() {
             const quantity = Number(item.quantity) || 1;
 
             return (
-              <div key={item.id} className="bg-white border border-gray-100 rounded-xl shadow-sm p-4 flex gap-4 items-center">
+              <div key={item.serviceId} className="bg-white border border-gray-100 rounded-xl shadow-sm p-4 flex gap-4 items-center">
                 <div className="w-24 h-24 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0 flex items-center justify-center text-4xl" aria-hidden>
                   {item.descriptionIcon || '📦'}
                 </div>
 
                 <div className="flex-1 min-w-0">
-                  <h3 className="text-lg font-semibold text-gray-900 line-clamp-1">{item.name || 'Unnamed Product'}</h3>
+                  <h3 className="text-lg font-semibold text-gray-900 line-clamp-1">{item.serviceName || 'Unnamed Product'}</h3>
                   <p className="text-sm text-gray-500">{item.category || 'Uncategorized'}</p>
                   <p className="text-base font-semibold text-gray-900 mt-1">${price.toFixed(2)}</p>
                 </div>
 
                 <div className="flex items-center gap-3">
                   <button
-                    onClick={() => updateQuantity(item.id, quantity - 1)}
+                    onClick={() => updateQuantity(item.serviceId, quantity - 1)}
                     className="w-9 h-9 inline-flex items-center justify-center border border-gray-200 rounded-lg hover:bg-gray-50"
-                    disabled={loading}
+                    disabled={loading || cartLoading}
                   >
                     <Minus className="w-4 h-4" />
                   </button>
                   <span className="w-8 text-center font-semibold">{quantity}</span>
                   <button
-                    onClick={() => updateQuantity(item.id, quantity + 1)}
+                    onClick={() => updateQuantity(item.serviceId, quantity + 1)}
                     className="w-9 h-9 inline-flex items-center justify-center border border-gray-200 rounded-lg hover:bg-gray-50"
-                    disabled={loading}
+                    disabled={loading || cartLoading}
                   >
                     <Plus className="w-4 h-4" />
                   </button>
                 </div>
 
                 <button
-                  onClick={() => removeItem(item.id)}
+                  onClick={() => removeItem(item.serviceId)}
                   className="text-red-500 hover:text-red-600"
-                  disabled={loading}
+                  disabled={loading || cartLoading}
                 >
                   <Trash2 className="w-5 h-5" />
                 </button>
@@ -167,10 +228,57 @@ export default function Cart() {
 
         <div className="bg-white border border-gray-100 rounded-xl shadow-sm p-6 h-fit">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Order Summary</h2>
+
+          {/* Coupon Section */}
+          <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Have a coupon code?
+            </label>
+            {!appliedCoupon ? (
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={couponCode}
+                  onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                  placeholder="Enter code"
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  disabled={validatingCoupon}
+                />
+                <button
+                  onClick={handleApplyCoupon}
+                  disabled={validatingCoupon || !couponCode.trim()}
+                  className="px-4 py-2 bg-primary-600 text-white rounded-lg font-medium hover:bg-primary-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-sm"
+                >
+                  {validatingCoupon ? 'Checking...' : 'Apply'}
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between p-2 bg-green-50 border border-green-200 rounded-lg">
+                <span className="text-sm font-semibold text-green-700">
+                  🎉 {appliedCoupon} applied
+                </span>
+                <button
+                  onClick={handleRemoveCoupon}
+                  className="text-xs text-red-600 hover:text-red-700 font-medium"
+                >
+                  Remove
+                </button>
+              </div>
+            )}
+          </div>
+
           <div className="flex items-center justify-between text-gray-700 mb-2">
             <span>Subtotal</span>
             <span>${(Number(total) || 0).toFixed(2)}</span>
           </div>
+
+          {couponDiscount > 0 && (
+            <div className="flex items-center justify-between text-green-600 mb-2">
+              <span>Coupon Discount</span>
+              <span>-${couponDiscount.toFixed(2)}</span>
+            </div>
+          )}
+
           <div className="flex items-center justify-between text-gray-700 mb-2">
             <span>Delivery</span>
             <span>$0.00</span>
@@ -178,7 +286,7 @@ export default function Cart() {
           <div className="border-t border-gray-200 my-4" />
           <div className="flex items-center justify-between text-lg font-bold text-gray-900 mb-6">
             <span>Total</span>
-            <span>${(Number(total) || 0).toFixed(2)}</span>
+            <span>${finalTotal.toFixed(2)}</span>
           </div>
 
           {!isAuthenticated && (

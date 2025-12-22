@@ -53,7 +53,7 @@ public class AuthService {
 
         user = userRepository.save(user);
 
-        String token = jwtUtil.generateToken(user.getEmail(), user.getRole().name());
+        String token = jwtUtil.generateToken(user.getEmail(), user.getRole().name(), user.getId());
 
         return new AuthResponse(token, user.getEmail(), user.getName(),
                                 user.getRole().name(), user.getId());
@@ -71,7 +71,7 @@ public class AuthService {
             throw new RuntimeException("Account is deactivated");
         }
 
-        String token = jwtUtil.generateToken(user.getEmail(), user.getRole().name());
+        String token = jwtUtil.generateToken(user.getEmail(), user.getRole().name(), user.getId());
 
         return new AuthResponse(token, user.getEmail(), user.getName(),
                                 user.getRole().name(), user.getId());

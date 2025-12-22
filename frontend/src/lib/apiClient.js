@@ -30,13 +30,24 @@ apiClient.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
-    // Handle 401 Unauthorized
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    // Check if error message indicates token needs refresh
+    const errorMessage = error.response?.data?.message || '';
+    const needsTokenRefresh = errorMessage.includes('User ID not found in token') ||
+                              errorMessage.includes('Please log out and log in again');
+
+    // Handle 401 Unauthorized or token refresh needed
+    if ((error.response?.status === 401 || needsTokenRefresh) && !originalRequest._retry) {
       originalRequest._retry = true;
 
       // Clear auth and redirect to login
       localStorage.removeItem('accessToken');
       localStorage.removeItem('user');
+
+      // Show a message if it's a token refresh issue
+      if (needsTokenRefresh) {
+        alert('Your session has expired. Please log in again.');
+      }
+
       window.location.href = '/auth/login';
 
       return Promise.reject(error);

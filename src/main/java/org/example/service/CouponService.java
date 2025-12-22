@@ -46,7 +46,7 @@ public class CouponService {
         coupon.setDescription(request.getDescription());
         coupon.setDiscountType(Coupon.DiscountType.valueOf(request.getDiscountType().toUpperCase()));
         coupon.setDiscountValue(request.getDiscountValue());
-        coupon.setMinOrderValue(request.getMinOrderValue());
+        coupon.setMinOrderValue(request.getMinOrderValue() != null ? request.getMinOrderValue() : 0.0);
         coupon.setMaxDiscountAmount(request.getMaxDiscountAmount());
         coupon.setValidFrom(request.getValidFrom());
         coupon.setValidUntil(request.getValidUntil());
@@ -64,7 +64,7 @@ public class CouponService {
         coupon.setDescription(request.getDescription());
         coupon.setDiscountType(Coupon.DiscountType.valueOf(request.getDiscountType().toUpperCase()));
         coupon.setDiscountValue(request.getDiscountValue());
-        coupon.setMinOrderValue(request.getMinOrderValue());
+        coupon.setMinOrderValue(request.getMinOrderValue() != null ? request.getMinOrderValue() : 0.0);
         coupon.setMaxDiscountAmount(request.getMaxDiscountAmount());
         coupon.setValidFrom(request.getValidFrom());
         coupon.setValidUntil(request.getValidUntil());
@@ -102,8 +102,10 @@ public class CouponService {
             throw new RuntimeException("Coupon usage limit exceeded");
         }
 
-        if (orderAmount < coupon.getMinOrderValue()) {
-            throw new RuntimeException("Minimum order value not met. Required: ₹" + coupon.getMinOrderValue());
+        // Check minimum order value (default to 0 if null)
+        Double minOrderValue = coupon.getMinOrderValue() != null ? coupon.getMinOrderValue() : 0.0;
+        if (orderAmount < minOrderValue) {
+            throw new RuntimeException("Minimum order value not met. Required: ₹" + minOrderValue);
         }
 
         // Calculate discount
@@ -137,7 +139,9 @@ public class CouponService {
             throw new RuntimeException("Coupon is not valid at this time");
         }
 
-        if (orderAmount < coupon.getMinOrderValue()) {
+        // Check minimum order value (default to 0 if null)
+        Double minOrderValue = coupon.getMinOrderValue() != null ? coupon.getMinOrderValue() : 0.0;
+        if (orderAmount < minOrderValue) {
             throw new RuntimeException("Minimum order value not met");
         }
 

@@ -11,7 +11,7 @@ public class BookingRequest {
     @NotNull(message = "Service ID is required")
     private String serviceId;
 
-    @NotNull(message = "Package ID is required")
+    // Package ID is optional - if null, we'll create a default package
     private String packageId;
 
     @NotNull(message = "Service date is required")

@@ -116,9 +116,18 @@ public class CustomerController {
     }
 
     private String extractUserIdFromToken(String token) {
-        // This is a simplified version. In real implementation, extract userId from JWT
-        // For now, return a test ID
-        return "test-customer-id";
+        // Remove "Bearer " prefix if present
+        if (token.startsWith("Bearer ")) {
+            token = token.substring(7);
+        }
+        String userId = jwtUtil.extractUserId(token);
+        System.out.println("Extracted userId from token: " + userId);
+
+        if (userId == null || userId.isEmpty()) {
+            throw new RuntimeException("User ID not found in token. Please log out and log in again to refresh your session.");
+        }
+
+        return userId;
     }
 }
 

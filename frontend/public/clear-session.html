@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clear Session - SmartCart</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 500px;
+            width: 100%;
+        }
+
+        h1 {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 28px;
+        }
+
+        .info {
+            background: #f0f4ff;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            border-left: 4px solid #667eea;
+        }
+
+        .info h3 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+
+        .info p {
+            color: #666;
+            line-height: 1.6;
+            font-size: 14px;
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 16px;
+            border-radius: 10px;
+            cursor: pointer;
+            width: 100%;
+            font-weight: 600;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 10px;
+            display: none;
+            font-weight: 500;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+            display: block;
+        }
+
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+            display: block;
+        }
+
+        .steps {
+            margin-top: 20px;
+        }
+
+        .step {
+            display: flex;
+            align-items: start;
+            margin: 15px 0;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .step-number {
+            background: #667eea;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            margin-right: 15px;
+            flex-shrink: 0;
+        }
+
+        .step-content {
+            flex: 1;
+        }
+
+        .step-title {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .step-desc {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .link {
+            display: inline-block;
+            margin-top: 20px;
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔄 Clear Session & Fix Login</h1>
+
+        <div class="info">
+            <h3>Why do I need this?</h3>
+            <p>Your authentication token is outdated and needs to be refreshed. This will clear your current session so you can log in again with a new, updated token.</p>
+        </div>
+
+        <button onclick="clearSession()">Clear My Session</button>
+
+        <div id="status" class="status"></div>
+
+        <div class="steps" id="steps" style="display: none;">
+            <h3 style="margin-bottom: 15px; color: #333;">Next Steps:</h3>
+
+            <div class="step">
+                <div class="step-number">1</div>
+                <div class="step-content">
+                    <div class="step-title">Backend Running?</div>
+                    <div class="step-desc">Make sure your backend is running on port 8080</div>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">2</div>
+                <div class="step-content">
+                    <div class="step-title">Go to Login</div>
+                    <div class="step-desc">Click the link below to go to the login page</div>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">3</div>
+                <div class="step-content">
+                    <div class="step-title">Login Again</div>
+                    <div class="step-desc">Enter your credentials to get a fresh token</div>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">4</div>
+                <div class="step-content">
+                    <div class="step-title">Test Features</div>
+                    <div class="step-desc">Try checkout, bookings, and other features</div>
+                </div>
+            </div>
+
+            <a href="http://localhost:5173/auth/login" class="link">→ Go to Login Page</a>
+        </div>
+    </div>
+
+    <script>
+        function clearSession() {
+            const statusDiv = document.getElementById('status');
+            const stepsDiv = document.getElementById('steps');
+
+            // Show loading
+            statusDiv.className = 'status info';
+            statusDiv.textContent = 'Clearing session...';
+
+            // Clear localStorage
+            localStorage.removeItem('accessToken');
+            localStorage.removeItem('user');
+            localStorage.removeItem('auth-storage');
+
+            // Clear sessionStorage
+            sessionStorage.clear();
+
+            // Clear cookies (if any)
+            document.cookie.split(";").forEach(function(c) {
+                document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+            });
+
+            // Show success
+            setTimeout(() => {
+                statusDiv.className = 'status success';
+                statusDiv.textContent = '✅ Session cleared successfully! You can now login again.';
+                stepsDiv.style.display = 'block';
+            }, 500);
+        }
+
+        // Auto-check if session exists
+        window.onload = function() {
+            const token = localStorage.getItem('accessToken');
+            const user = localStorage.getItem('user');
+
+            if (!token && !user) {
+                const statusDiv = document.getElementById('status');
+                const stepsDiv = document.getElementById('steps');
+                statusDiv.className = 'status info';
+                statusDiv.textContent = 'ℹ️ No active session found. You can go directly to login.';
+                stepsDiv.style.display = 'block';
+            }
+        };
+    </script>
+</body>
+</html>
+

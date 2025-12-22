@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Loader2, AlertCircle, PackageSearch, PlusCircle, Trash2, Edit } from 'lucide-react';
+import { Loader2, AlertCircle, PackageSearch, PlusCircle, Trash2, Edit, X } from 'lucide-react';
 import { adminAPI, servicesAPI } from '../../services/api';
 import toast from 'react-hot-toast';
 
@@ -44,6 +44,17 @@ export default function AdminProducts() {
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingService, setEditingService] = useState(null);
+  const [formData, setFormData] = useState({
+    name: '',
+    description: '',
+    category: 'ELECTRONICS',
+    basePrice: '',
+    estimatedDuration: '',
+    active: true,
+  });
 
   useEffect(() => {
     loadServices();
@@ -72,6 +83,67 @@ export default function AdminProducts() {
     } catch (err) {
       toast.error(err?.response?.data?.message || 'Failed to delete service');
     }
+  };
+
+  const handleEdit = (service) => {
+    setEditingService(service);
+    setFormData({
+      name: service.name || '',
+      description: service.description || '',
+      category: service.category || 'ELECTRONICS',
+      basePrice: service.basePrice || '',
+      estimatedDuration: service.estimatedDuration || '',
+      active: service.active ?? true,
+    });
+    setShowEditModal(true);
+  };
+
+  const handleCreate = () => {
+    setFormData({
+      name: '',
+      description: '',
+      category: 'ELECTRONICS',
+      basePrice: '',
+      estimatedDuration: '',
+      active: true,
+    });
+    setShowCreateModal(true);
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      const data = {
+        ...formData,
+        basePrice: parseFloat(formData.basePrice) || 0,
+        estimatedDuration: parseInt(formData.estimatedDuration) || 60,
+      };
+
+      if (editingService) {
+        await adminAPI.updateService(editingService.id, data);
+        toast.success('Service updated successfully');
+        setShowEditModal(false);
+      } else {
+        await adminAPI.createService(data);
+        toast.success('Service created successfully');
+        setShowCreateModal(false);
+      }
+
+      loadServices();
+      setEditingService(null);
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'Failed to save service');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const closeModal = () => {
+    setShowEditModal(false);
+    setShowCreateModal(false);
+    setEditingService(null);
   };
 
   const filteredServices = services.filter((s) => {
@@ -108,9 +180,12 @@ export default function AdminProducts() {
           <h1 className="text-3xl font-bold text-gray-900">Product Management</h1>
           <p className="text-gray-600">Manage all services and products</p>
         </div>
-        <button className="inline-flex items-center gap-2 bg-primary-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-primary-700">
+        <button
+          onClick={handleCreate}
+          className="inline-flex items-center gap-2 bg-primary-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-primary-700"
+        >
           <PlusCircle className="w-5 h-5" />
-          Add Service (coming soon)
+          Add Service
         </button>
       </div>
 
@@ -194,8 +269,9 @@ export default function AdminProducts() {
                             View
                           </Link>
                           <button
-                            onClick={() => toast.info('Edit feature coming soon')}
+                            onClick={() => handleEdit(service)}
                             className="text-gray-600 hover:text-gray-700"
+                            title="Edit service"
                           >
                             <Edit className="w-4 h-4" />
                           </button>
@@ -218,6 +294,131 @@ export default function AdminProducts() {
             <p className="text-sm text-gray-600">
               Showing {filteredServices.length} of {services.length} services
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* Create/Edit Modal */}
+      {(showCreateModal || showEditModal) && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+              <h2 className="text-2xl font-bold text-gray-900">
+                {editingService ? 'Edit Service' : 'Create New Service'}
+              </h2>
+              <button onClick={closeModal} className="text-gray-400 hover:text-gray-600">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Service Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  placeholder="e.g., Smartphone Delivery"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Description
+                </label>
+                <textarea
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  rows="3"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  placeholder="Describe the service..."
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Category *
+                  </label>
+                  <select
+                    required
+                    value={formData.category}
+                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  >
+                    {Object.keys(CATEGORY_LABELS).map((cat) => (
+                      <option key={cat} value={cat}>
+                        {CATEGORY_LABELS[cat]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Base Price ($) *
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    min="0"
+                    step="0.01"
+                    value={formData.basePrice}
+                    onChange={(e) => setFormData({ ...formData, basePrice: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Estimated Duration (minutes)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={formData.estimatedDuration}
+                  onChange={(e) => setFormData({ ...formData, estimatedDuration: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  placeholder="60"
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="active"
+                  checked={formData.active}
+                  onChange={(e) => setFormData({ ...formData, active: e.target.checked })}
+                  className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                />
+                <label htmlFor="active" className="text-sm font-medium text-gray-700">
+                  Active (visible to customers)
+                </label>
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="flex-1 bg-primary-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-primary-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  {loading ? 'Saving...' : editingService ? 'Update Service' : 'Create Service'}
+                </button>
+                <button
+                  type="button"
+                  onClick={closeModal}
+                  className="px-6 py-3 border border-gray-300 rounded-lg font-semibold text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

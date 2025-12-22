@@ -50,13 +50,6 @@ export default function AppLayout({ children }) {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white shadow-sm border-b sticky top-0 z-50">
-        {/* Top Bar */}
-        <div className="bg-primary-600 text-white py-2">
-          <div className="max-w-7xl mx-auto px-4 flex justify-between items-center text-sm">
-            <p>🚚 Free shipping on orders over $50</p>
-            <p>📞 Call us: 1-800-SMART-CART</p>
-          </div>
-        </div>
 
         {/* Main Header */}
         <div className="max-w-7xl mx-auto px-4 py-4">

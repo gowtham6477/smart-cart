@@ -6,6 +6,7 @@ import org.example.entity.BookingImage;
 import org.example.entity.EmployeeAttendance;
 import org.example.repository.BookingImageRepository;
 import org.example.repository.BookingRepository;
+import org.example.security.JwtUtil;
 import org.example.service.BookingService;
 import org.example.service.CloudinaryService;
 import org.example.service.EmployeeService;
@@ -39,6 +40,9 @@ public class EmployeeController {
 
     @Autowired
     private BookingRepository bookingRepository;
+
+    @Autowired
+    private JwtUtil jwtUtil;
 
     @GetMapping("/bookings")
     public ResponseEntity<ApiResponse<List<BookingResponse>>> getMyBookings(
@@ -123,8 +127,17 @@ public class EmployeeController {
     }
 
     private String extractEmployeeIdFromToken(String token) {
-        // Simplified - in real implementation extract from JWT
-        return "test-employee-id";
+        // Remove "Bearer " prefix if present
+        if (token.startsWith("Bearer ")) {
+            token = token.substring(7);
+        }
+        String employeeId = jwtUtil.extractUserId(token);
+
+        if (employeeId == null || employeeId.isEmpty()) {
+            throw new RuntimeException("Employee ID not found in token. Please log out and log in again to refresh your session.");
+        }
+
+        return employeeId;
     }
 }
 
