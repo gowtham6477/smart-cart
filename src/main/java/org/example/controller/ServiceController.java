@@ -20,7 +20,8 @@ public class ServiceController {
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<Service>>> getAllServices() {
-        List<Service> services = serviceManagementService.getActiveServices();
+        // Return ALL services (including inactive) - filter in frontend if needed
+        List<Service> services = serviceManagementService.getAllServices();
         return ResponseEntity.ok(ApiResponse.success("Services retrieved successfully", services));
     }
 

@@ -1,13 +1,16 @@
 import { Link } from 'react-router-dom';
-import { ArrowRight, ShieldCheck, Truck, HeadphonesIcon, Package } from 'lucide-react';
+import { ArrowRight, ShieldCheck, Truck, HeadphonesIcon, Package, Star } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { servicesAPI } from '../../services/api';
+import useCartStore from '../../stores/cartStore';
 
 const FEATURED_CATEGORIES = [
-  { name: 'Antiques', value: 'antiques', emoji: '🏺', description: 'Timeless treasures' },
-  { name: 'Electronics', value: 'electronics', emoji: '📱', description: 'Latest technology' },
-  { name: 'Jewelry', value: 'jewelry', emoji: '💍', description: 'Precious stones & metals' },
-  { name: 'Musical Instruments', value: 'musical', emoji: '🎸', description: 'For the artists' },
-  { name: 'TVs & Monitors', value: 'tvs', emoji: '📺', description: 'Crystal clear displays' },
-  { name: 'Vintage Heirloom', value: 'vintage', emoji: '👑', description: 'Rare collectibles' },
+  { name: 'Antiques', value: 'ANTIQUES', emoji: '🏺', description: 'Timeless treasures' },
+  { name: 'Electronics', value: 'ELECTRONICS', emoji: '📱', description: 'Latest technology' },
+  { name: 'Jewelry', value: 'JEWELRY', emoji: '💍', description: 'Precious stones & metals' },
+  { name: 'Musical Instruments', value: 'MUSICAL_INSTRUMENTS', emoji: '🎸', description: 'For the artists' },
+  { name: 'TVs & Monitors', value: 'TV_MONITOR', emoji: '📺', description: 'Crystal clear displays' },
+  { name: 'Vintage Heirloom', value: 'VINTAGE_HEIRLOOM', emoji: '👑', description: 'Rare collectibles' },
 ];
 
 const FEATURES = [
@@ -34,6 +37,24 @@ const FEATURES = [
 ];
 
 export default function Home() {
+  const [featuredProducts, setFeaturedProducts] = useState([]);
+  const addItem = useCartStore((s) => s.addItem);
+
+  useEffect(() => {
+    const loadFeatured = async () => {
+      try {
+        const res = await servicesAPI.getAll();
+        const products = res.data.data || [];
+        // Get random 8 products
+        const shuffled = products.sort(() => 0.5 - Math.random());
+        setFeaturedProducts(shuffled.slice(0, 8));
+      } catch (error) {
+        console.error('Failed to load featured products:', error);
+      }
+    };
+    loadFeatured();
+  }, []);
+
   return (
     <div>
       {/* Hero Section */}
@@ -125,28 +146,93 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Services */}
+
+      {/* Featured Products */}
       <section className="py-16 bg-white">
         <div className="max-w-7xl mx-auto px-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div className="bg-white p-6 rounded-lg shadow-md">
-              <div className="text-4xl mb-4">🚗</div>
-              <h3 className="text-xl font-bold mb-2">Car Wash</h3>
-              <p className="text-gray-600">Professional car cleaning services</p>
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">
+                Featured Products
+              </h2>
+              <p className="text-xl text-gray-600">
+                Handpicked selections just for you
+              </p>
             </div>
-            <div className="bg-white p-6 rounded-lg shadow-md">
-              <div className="text-4xl mb-4">🏠</div>
-              <h3 className="text-xl font-bold mb-2">Home Cleaning</h3>
-              <p className="text-gray-600">Deep cleaning for your home</p>
-            </div>
-            <div className="bg-white p-6 rounded-lg shadow-md">
-              <div className="text-4xl mb-4">👔</div>
-              <h3 className="text-xl font-bold mb-2">Laundry</h3>
-              <p className="text-gray-600">Wash, iron, and fold services</p>
-            </div>
+            <Link
+              to="/products"
+              className="text-primary-600 hover:text-primary-700 font-semibold flex items-center gap-2"
+            >
+              View All
+              <ArrowRight className="w-5 h-5" />
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {featuredProducts.map((product) => (
+              <div
+                key={product.id}
+                className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow group"
+              >
+                <Link to={`/products/${product.id}`} className="block">
+                  <div className="aspect-square bg-gray-100 overflow-hidden">
+                    {product.imageUrl ? (
+                      <img
+                        src={product.imageUrl}
+                        alt={product.name}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        onError={(e) => {
+                          e.target.src = 'https://via.placeholder.com/400x400?text=No+Image';
+                        }}
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-4xl">
+                        📦
+                      </div>
+                    )}
+                  </div>
+                </Link>
+
+                <div className="p-4">
+                  <Link to={`/products/${product.id}`}>
+                    <h3 className="font-semibold text-gray-900 mb-2 line-clamp-2 hover:text-primary-600">
+                      {product.name}
+                    </h3>
+                  </Link>
+
+                  <div className="flex items-center gap-1 mb-2">
+                    {[...Array(5)].map((_, i) => (
+                      <Star key={i} className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                    ))}
+                  </div>
+
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-2xl font-bold text-gray-900">
+                      ${product.basePrice?.toFixed(2)}
+                    </span>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      addItem({
+                        id: product.id,
+                        name: product.name,
+                        price: product.basePrice || 0,
+                        imageUrl: product.imageUrl,
+                        category: product.category,
+                      });
+                    }}
+                    className="w-full bg-primary-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-primary-700 transition"
+                  >
+                    Add to Cart
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </section>
+
 
       {/* CTA Section */}
       <section className="py-16 bg-primary-600 text-white">

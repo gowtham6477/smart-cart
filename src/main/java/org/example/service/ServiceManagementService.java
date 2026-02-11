@@ -8,11 +8,13 @@ import org.example.repository.ServicePackageRepository;
 import org.example.repository.ServiceRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
+import lombok.extern.slf4j.Slf4j;
 
 import java.time.LocalDateTime;
 import java.util.List;
 
 @org.springframework.stereotype.Service
+@Slf4j
 public class ServiceManagementService {
 
     @Autowired
@@ -26,7 +28,7 @@ public class ServiceManagementService {
     }
 
     public List<Service> getActiveServices() {
-        return serviceRepository.findByActiveTrue();
+        return serviceRepository.findAllActiveOrNull();
     }
 
     public Service getServiceById(String id) {
@@ -35,7 +37,22 @@ public class ServiceManagementService {
     }
 
     public List<Service> getServicesByCategory(String category) {
-        return serviceRepository.findByCategoryAndActiveTrue(category, true);
+        return serviceRepository.findByCategoryActiveOrNull(category);
+    }
+
+    // Fix all services with null active field
+    @Transactional
+    public int fixNullActiveFields() {
+        List<Service> allServices = serviceRepository.findAll();
+        int count = 0;
+        for (Service service : allServices) {
+            if (service.getActive() == null) {
+                service.setActive(true);
+                serviceRepository.save(service);
+                count++;
+            }
+        }
+        return count;
     }
 
     @Transactional
@@ -45,20 +62,40 @@ public class ServiceManagementService {
         service.setDescription(request.getDescription());
         service.setCategory(request.getCategory());
         service.setImageUrl(request.getImageUrl());
-        service.setActive(request.getActive());
+        service.setActive(request.getActive() != null ? request.getActive() : true);
+        service.setBasePrice(request.getBasePrice());
+        service.setEstimatedDuration(request.getEstimatedDuration());
+        service.setFeatures(request.getFeatures());
         return serviceRepository.save(service);
     }
 
     @Transactional
     public Service updateService(String id, ServiceRequest request) {
         Service service = getServiceById(id);
+        log.info("Updating service {}: active in request={}, active in db={}", 
+                 id, request.getActive(), service.getActive());
+        
         service.setName(request.getName());
         service.setDescription(request.getDescription());
         service.setCategory(request.getCategory());
         service.setImageUrl(request.getImageUrl());
-        service.setActive(request.getActive());
+        
+        // Ensure active is always set to true if not explicitly false
+        Boolean newActive = request.getActive();
+        if (newActive == null) {
+            newActive = service.getActive() != null ? service.getActive() : true;
+        }
+        service.setActive(newActive);
+        log.info("Setting active to: {}", newActive);
+        
+        service.setBasePrice(request.getBasePrice());
+        service.setEstimatedDuration(request.getEstimatedDuration());
+        service.setFeatures(request.getFeatures());
         service.setUpdatedAt(LocalDateTime.now());
-        return serviceRepository.save(service);
+        
+        Service saved = serviceRepository.save(service);
+        log.info("Saved service active={}", saved.getActive());
+        return saved;
     }
 
     @Transactional

@@ -48,6 +48,7 @@ const useCartStore = create((set, get) => ({
         price: Number(product.price) || 0,
         quantity: Number(quantity) || 1,
         descriptionIcon: product.descriptionIcon,
+        imageUrl: product.imageUrl,
       };
 
       const response = await customerAPI.addToCart(item);

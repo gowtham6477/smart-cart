@@ -10,11 +10,13 @@ const CATEGORY_ICONS = {
   CERAMICS: '🏺',
   DAIRY: '🥛',
   ELECTRONICS: '📱',
+  FIREWORKS: '🎆',
   FLAMMABLE_LIQUIDS: '🔥',
   GLASSWARE: '🍷',
   JEWELRY: '💍',
   INDUSTRIAL_EQUIPMENT: '⚙️',
   MUSICAL_INSTRUMENTS: '🎸',
+  PAINTINGS: '🖼️',
   PHARMACEUTICALS: '💊',
   SCULPTURES: '🗿',
   TV_MONITOR: '📺',
@@ -27,11 +29,13 @@ const CATEGORY_LABELS = {
   CERAMICS: 'Ceramics',
   DAIRY: 'Dairy',
   ELECTRONICS: 'Electronics',
+  FIREWORKS: 'Fireworks',
   FLAMMABLE_LIQUIDS: 'Flammable Liquids',
   GLASSWARE: 'Glassware',
   JEWELRY: 'High-End Jewelry',
   INDUSTRIAL_EQUIPMENT: 'Industrial Equipment',
   MUSICAL_INSTRUMENTS: 'Musical Instruments',
+  PAINTINGS: 'Paintings',
   PHARMACEUTICALS: 'Pharmaceuticals',
   SCULPTURES: 'Sculptures',
   TV_MONITOR: 'TVs & Monitors',
@@ -54,6 +58,7 @@ export default function AdminProducts() {
     basePrice: '',
     estimatedDuration: '',
     active: true,
+    imageUrl: '',
   });
 
   useEffect(() => {
@@ -94,6 +99,7 @@ export default function AdminProducts() {
       basePrice: service.basePrice || '',
       estimatedDuration: service.estimatedDuration || '',
       active: service.active ?? true,
+      imageUrl: service.imageUrl || '',
     });
     setShowEditModal(true);
   };
@@ -106,6 +112,7 @@ export default function AdminProducts() {
       basePrice: '',
       estimatedDuration: '',
       active: true,
+      imageUrl: '',
     });
     setShowCreateModal(true);
   };
@@ -225,7 +232,7 @@ export default function AdminProducts() {
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-100">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Icon</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Image</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Name</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Category</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Price</th>
@@ -241,7 +248,13 @@ export default function AdminProducts() {
                   return (
                     <tr key={service.id} className="hover:bg-gray-50 transition">
                       <td className="px-4 py-3">
-                        <div className="text-3xl">{icon}</div>
+                        <div className="w-12 h-12 flex items-center justify-center bg-gray-100 rounded-lg overflow-hidden">
+                          {service.imageUrl ? (
+                            <img src={service.imageUrl} alt={service.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <span className="text-2xl">{icon}</span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-3">
                         <div className="font-semibold text-gray-900">{service.name}</div>
@@ -336,6 +349,19 @@ export default function AdminProducts() {
                   rows="3"
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   placeholder="Describe the service..."
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Image URL
+                </label>
+                <input
+                  type="url"
+                  value={formData.imageUrl}
+                  onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  placeholder="https://example.com/image.jpg"
                 />
               </div>
 

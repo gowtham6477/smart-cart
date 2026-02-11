@@ -15,7 +15,7 @@ export default function MyOrders() {
   const loadOrders = async () => {
     try {
       setLoading(true);
-      const res = await customerAPI.getBookings();
+      const res = await customerAPI.getOrders();
       console.log('My orders response:', res.data);
       setOrders(res.data.data || []);
       setError(null);
@@ -92,48 +92,66 @@ export default function MyOrders() {
             <div className="flex flex-wrap items-start justify-between gap-4 mb-4">
               <div>
                 <div className="flex items-center gap-3 mb-2">
-                  <h3 className="text-lg font-semibold text-gray-900">{order.serviceName}</h3>
+                  <h3 className="text-lg font-semibold text-gray-900">Order #{order.orderNumber}</h3>
                   <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
-                    order.status === 'COMPLETED' ? 'bg-green-100 text-green-700' :
+                    order.status === 'DELIVERED' ? 'bg-green-100 text-green-700' :
                     order.status === 'CANCELLED' ? 'bg-red-100 text-red-700' :
-                    order.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-700' :
+                    order.status === 'SHIPPED' ? 'bg-blue-100 text-blue-700' :
+                    order.status === 'PROCESSING' ? 'bg-yellow-100 text-yellow-700' :
                     'bg-primary-50 text-primary-700'
                   }`}>
                     {order.status || 'PENDING'}
                   </span>
                 </div>
-                <p className="text-sm text-gray-600">Booking #{order.bookingNumber}</p>
-                <p className="text-sm text-gray-600">{order.packageName}</p>
+                <p className="text-sm text-gray-600">{order.items?.length || 0} item(s)</p>
               </div>
               <div className="text-right">
                 <div className="text-2xl font-bold text-gray-900">
-                  ${(order.finalPrice || order.originalPrice || 0).toFixed(2)}
+                  ${(order.totalAmount || 0).toFixed(2)}
                 </div>
+                {order.discountAmount > 0 && (
+                  <p className="text-sm text-green-600">Saved ${order.discountAmount.toFixed(2)}</p>
+                )}
                 <p className="text-sm text-gray-500">
                   {order.createdAt ? new Date(order.createdAt).toLocaleDateString() : 'N/A'}
                 </p>
               </div>
             </div>
 
+            {/* Order Items */}
+            <div className="mb-4">
+              <p className="text-sm font-semibold text-gray-700 mb-2">Items:</p>
+              <div className="space-y-2">
+                {order.items?.map((item, idx) => (
+                  <div key={idx} className="flex justify-between items-center text-sm border-l-2 border-primary-200 pl-3 py-1">
+                    <div>
+                      <span className="font-medium text-gray-900">{item.productName}</span>
+                      <span className="text-gray-500 ml-2">× {item.quantity}</span>
+                    </div>
+                    <span className="font-semibold text-gray-900">${(item.price * item.quantity).toFixed(2)}</span>
+                  </div>
+                )) || <p className="text-sm text-gray-500">No items</p>}
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-gray-100">
               <div>
-                <p className="text-sm text-gray-500 mb-1">Service Address</p>
-                <p className="text-sm font-medium text-gray-900">{order.serviceAddress || 'N/A'}</p>
+                <p className="text-sm text-gray-500 mb-1">Delivery Address</p>
+                <p className="text-sm font-medium text-gray-900">{order.deliveryAddress || 'N/A'}</p>
                 <p className="text-sm text-gray-600">{order.city}, {order.pincode}</p>
               </div>
-              {order.scheduledDate && (
+              {order.estimatedDelivery && (
                 <div>
-                  <p className="text-sm text-gray-500 mb-1">Scheduled For</p>
+                  <p className="text-sm text-gray-500 mb-1">Estimated Delivery</p>
                   <p className="text-sm font-medium text-gray-900">
-                    {new Date(order.scheduledDate).toLocaleDateString()} at {order.serviceTime || 'TBD'}
+                    {new Date(order.estimatedDelivery).toLocaleDateString()}
                   </p>
                 </div>
               )}
-              {order.employeeName && (
+              {order.trackingNumber && (
                 <div>
-                  <p className="text-sm text-gray-500 mb-1">Assigned Employee</p>
-                  <p className="text-sm font-medium text-gray-900">{order.employeeName}</p>
-                  <p className="text-sm text-gray-600">{order.employeeMobile}</p>
+                  <p className="text-sm text-gray-500 mb-1">Tracking Number</p>
+                  <p className="text-sm font-medium text-gray-900">{order.trackingNumber}</p>
                 </div>
               )}
               {order.customerNote && (

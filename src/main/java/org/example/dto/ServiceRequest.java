@@ -2,6 +2,7 @@ package org.example.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
+import java.util.List;
 
 @Data
 public class ServiceRequest {
@@ -15,5 +16,8 @@ public class ServiceRequest {
 
     private String imageUrl;
     private Boolean active = true;
+    private Double basePrice;
+    private Integer estimatedDuration;
+    private List<String> features;
 }
 

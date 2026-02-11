@@ -20,6 +20,7 @@ import ProductList from './pages/customer/ProductList';
 import ProductDetail from './pages/customer/ProductDetail';
 import Cart from './pages/customer/Cart';
 import MyOrders from './pages/customer/MyOrders';
+import Wallet from './pages/customer/Wallet';
 import Profile from './pages/customer/Profile';
 
 // Employee Pages
@@ -30,9 +31,15 @@ import EmployeeOrders from './pages/employee/Orders';
 import AdminDashboard from './pages/admin/Dashboard';
 import AdminProducts from './pages/admin/Products';
 import AdminEmployees from './pages/admin/Employees';
+import AddEmployee from './pages/admin/AddEmployee';
+import EmployeeProfile from './pages/admin/EmployeeProfile';
+import EditEmployee from './pages/admin/EditEmployee';
+import TaskList from './pages/admin/TaskList';
+import TaskAssignment from './pages/admin/TaskAssignment';
 import AdminOrders from './pages/admin/Orders';
 import AdminCoupons from './pages/admin/Coupons';
 import AdminPayments from './pages/admin/Payments';
+import AdminBookings from './pages/admin/Bookings';
 
 // Components
 import PrivateRoute from './components/routes/PrivateRoute';
@@ -89,6 +96,14 @@ function App() {
             }
           />
           <Route
+            path="/my/wallet"
+            element={
+              <PrivateRoute>
+                <AppLayout><Wallet /></AppLayout>
+              </PrivateRoute>
+            }
+          />
+          <Route
             path="/profile"
             element={
               <PrivateRoute>
@@ -141,10 +156,58 @@ function App() {
             }
           />
           <Route
+            path="/admin/employees/add"
+            element={
+              <RoleRoute role="ADMIN">
+                <AppLayout><AddEmployee /></AppLayout>
+              </RoleRoute>
+            }
+          />
+          <Route
+            path="/admin/employees/:id"
+            element={
+              <RoleRoute role="ADMIN">
+                <AppLayout><EmployeeProfile /></AppLayout>
+              </RoleRoute>
+            }
+          />
+          <Route
+            path="/admin/employees/:id/edit"
+            element={
+              <RoleRoute role="ADMIN">
+                <AppLayout><EditEmployee /></AppLayout>
+              </RoleRoute>
+            }
+          />
+          <Route
+            path="/admin/tasks"
+            element={
+              <RoleRoute role="ADMIN">
+                <AppLayout><TaskList /></AppLayout>
+              </RoleRoute>
+            }
+          />
+          <Route
+            path="/admin/tasks/:taskId/assign"
+            element={
+              <RoleRoute role="ADMIN">
+                <AppLayout><TaskAssignment /></AppLayout>
+              </RoleRoute>
+            }
+          />
+          <Route
             path="/admin/orders"
             element={
               <RoleRoute role="ADMIN">
                 <AppLayout><AdminOrders /></AppLayout>
+              </RoleRoute>
+            }
+          />
+          <Route
+            path="/admin/bookings"
+            element={
+              <RoleRoute role="ADMIN">
+                <AppLayout><AdminBookings /></AppLayout>
               </RoleRoute>
             }
           />

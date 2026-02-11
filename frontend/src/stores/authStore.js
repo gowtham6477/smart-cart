@@ -114,6 +114,12 @@ const useAuthStore = create(
         const { user } = get();
         return user?.role === role;
       },
+
+      // Update user data
+      setUser: (userData) => {
+        set({ user: userData });
+        localStorage.setItem('user', JSON.stringify(userData));
+      },
     }),
     {
       name: 'auth-storage',

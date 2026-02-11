@@ -43,6 +43,7 @@ public class Cart {
         private Double price;
         private Integer quantity;
         private String descriptionIcon;
+        private String imageUrl;
     }
 }
 

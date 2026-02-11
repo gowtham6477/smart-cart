@@ -30,6 +30,12 @@ public class BookingService {
     private ServicePackageRepository packageRepository;
 
     @Autowired
+    private TaskService taskService;
+
+    @Autowired
+    private EmployeeRepository employeeRepository;
+
+    @Autowired
     private CouponRepository couponRepository;
 
     @Autowired
@@ -182,20 +188,42 @@ public class BookingService {
         Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new RuntimeException("Booking not found"));
 
-        User employee = userRepository.findById(employeeId)
+        // Find employee record (not user)
+        Employee employee = employeeRepository.findById(employeeId)
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
 
-        if (!employee.getRole().equals(User.Role.EMPLOYEE)) {
-            throw new RuntimeException("User is not an employee");
-        }
-
+        // Update booking with employee info
         booking.setEmployeeId(employee.getId());
         booking.setEmployeeName(employee.getName());
-        booking.setEmployeeMobile(employee.getMobile());
+        booking.setEmployeeMobile(employee.getPhone());
         booking.setStatus(Booking.BookingStatus.ASSIGNED);
 
         booking = bookingRepository.save(booking);
+
+        // Create a Task for the employee
+        Task task = new Task();
+        task.setTaskNumber(generateTaskNumber());
+        task.setTitle("Service: " + booking.getServiceName());
+        task.setDescription("Customer: " + booking.getCustomerName() +
+                           "\nService: " + booking.getServiceName() +
+                           (booking.getPackageName() != null ? "\nPackage: " + booking.getPackageName() : "") +
+                           "\nAddress: " + booking.getAddress() + ", " + booking.getCity());
+        task.setBookingId(booking.getId());
+        task.setAssignedTo(employee.getId());
+        task.setAssignedToName(employee.getName());
+        task.setPriority(Task.TaskPriority.MEDIUM);
+        task.setStatus(Task.TaskStatus.ASSIGNED);
+        task.setAssignedAt(LocalDateTime.now());
+        task.setAssignedBy("Admin");
+        task.setCreatedAt(LocalDateTime.now());
+
+        taskService.saveTask(task);
+
         return mapToResponse(booking);
+    }
+
+    private String generateTaskNumber() {
+        return "TASK-" + System.currentTimeMillis() + "-" + (int)(Math.random() * 1000);
     }
 
     @Transactional

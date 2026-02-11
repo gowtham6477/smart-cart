@@ -1,25 +1,9 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { ShoppingCart, User, Search, Menu, X, Package, LogOut, Heart, Settings } from 'lucide-react';
+import { ShoppingCart, User, Search, Menu, X, Package, LogOut, Heart, Settings, Wallet } from 'lucide-react';
 import { useState } from 'react';
 import useAuthStore from '../../stores/authStore';
 import useCartStore from '../../stores/cartStore';
-
-const CATEGORIES = [
-  { name: 'Antiques', value: 'antiques', emoji: '🏺' },
-  { name: 'Batteries', value: 'batteries', emoji: '🔋' },
-  { name: 'Ceramics', value: 'ceramics', emoji: '🏺' },
-  { name: 'Dairy', value: 'dairy', emoji: '🥛' },
-  { name: 'Electronics', value: 'electronics', emoji: '📱' },
-  { name: 'Flammable Liquids', value: 'flammable', emoji: '🔥' },
-  { name: 'Glassware', value: 'glassware', emoji: '🍷' },
-  { name: 'High-End Jewelry', value: 'jewelry', emoji: '💍' },
-  { name: 'Industrial Equipment', value: 'industrial', emoji: '⚙️' },
-  { name: 'Musical Instruments', value: 'musical', emoji: '🎸' },
-  { name: 'Pharmaceuticals', value: 'pharmaceuticals', emoji: '💊' },
-  { name: 'Sculptures', value: 'sculptures', emoji: '🗿' },
-  { name: 'TVs & Monitors', value: 'tvs', emoji: '📺' },
-  { name: 'Vintage Heirloom', value: 'vintage', emoji: '👑' },
-];
+import NotificationBell from '../NotificationBell';
 
 export default function AppLayout({ children }) {
   const { user, logout } = useAuthStore();
@@ -93,9 +77,10 @@ export default function AppLayout({ children }) {
                   <>
                     <Link to="/admin" className="text-sm font-medium text-gray-700 hover:text-primary-600">Dashboard</Link>
                     <Link to="/admin/products" className="text-sm font-medium text-gray-700 hover:text-primary-600">Products</Link>
+                    <Link to="/admin/bookings" className="text-sm font-medium text-gray-700 hover:text-primary-600">Bookings</Link>
                     <Link to="/admin/orders" className="text-sm font-medium text-gray-700 hover:text-primary-600">Orders</Link>
-                    <Link to="/admin/coupons" className="text-sm font-medium text-gray-700 hover:text-primary-600">Coupons</Link>
                     <Link to="/admin/employees" className="text-sm font-medium text-gray-700 hover:text-primary-600">Employees</Link>
+                    <Link to="/admin/tasks" className="text-sm font-medium text-gray-700 hover:text-primary-600">Tasks</Link>
                   </>
                 )}
                 {isEmployee && (
@@ -109,6 +94,14 @@ export default function AppLayout({ children }) {
 
             {/* Actions */}
             <div className="flex items-center gap-4">
+              {/* Notification Bell for Admin/Employee */}
+              {isAdmin && (
+                <NotificationBell userType="admin" />
+              )}
+              {isEmployee && (
+                <NotificationBell userType="employee" />
+              )}
+
               {/* Cart - Hide for Admin/Employee */}
               {!isAdmin && !isEmployee && (
                 <Link
@@ -176,6 +169,14 @@ export default function AppLayout({ children }) {
                           <span>My Orders</span>
                         </Link>
                         <Link
+                          to="/my/wallet"
+                          className="flex items-center gap-3 px-4 py-2 hover:bg-gray-50 transition-colors"
+                          onClick={() => setProfileDropdownOpen(false)}
+                        >
+                          <Wallet className="w-4 h-4" />
+                          <span>My Wallet</span>
+                        </Link>
+                        <Link
                           to="/wishlist"
                           className="flex items-center gap-3 px-4 py-2 hover:bg-gray-50 transition-colors"
                           onClick={() => setProfileDropdownOpen(false)}
@@ -223,31 +224,6 @@ export default function AppLayout({ children }) {
           </div>
         </div>
 
-        {/* Categories Bar - Only show for customers */}
-        {!isAdmin && !isEmployee && (
-          <div className="border-t bg-gray-50">
-            <div className="max-w-7xl mx-auto px-4 py-2 overflow-x-auto no-scrollbar">
-              <div className="flex gap-4 items-center whitespace-nowrap">
-                <Link
-                  to="/products"
-                  className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-primary-600 hover:bg-white rounded-lg transition-colors"
-                >
-                  All Products
-                </Link>
-                {CATEGORIES.map((category) => (
-                  <Link
-                    key={category.value}
-                    to={`/products/category/${category.value}`}
-                    className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-primary-600 hover:bg-white rounded-lg transition-colors flex items-center gap-2"
-                  >
-                    <span>{category.emoji}</span>
-                    <span>{category.name}</span>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Mobile Menu - Only for customers */}
         {!isAdmin && !isEmployee && mobileMenuOpen && (
@@ -270,19 +246,6 @@ export default function AppLayout({ children }) {
                   </button>
                 </div>
               </form>
-              <div className="space-y-2">
-                {CATEGORIES.map((category) => (
-                  <Link
-                    key={category.value}
-                    to={`/products/category/${category.value}`}
-                    className="block px-4 py-2 hover:bg-gray-50 rounded-lg"
-                    onClick={() => setMobileMenuOpen(false)}
-                  >
-                    <span className="mr-2">{category.emoji}</span>
-                    {category.name}
-                  </Link>
-                ))}
-              </div>
             </div>
           </div>
         )}
