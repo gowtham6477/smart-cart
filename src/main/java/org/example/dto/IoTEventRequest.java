@@ -15,6 +15,8 @@ public class IoTEventRequest {
 
     private String employeeId;
 
+    private String orderId;  // Order this device is attached to
+
     private String bookingId;
 
     @NotNull(message = "Event type is required")

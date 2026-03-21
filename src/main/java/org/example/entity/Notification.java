@@ -33,7 +33,14 @@ public class Notification {
         ORDER_REFUNDED,
         CHECK_IN,
         CHECK_OUT,
-        GENERAL
+        GENERAL,
+        // IoT Event Notifications
+        IOT_FALL_DETECTED,
+        IOT_DEVICE_OFFLINE,
+        IOT_IMPACT_DETECTED,
+        IOT_ABNORMAL_MOVEMENT,
+        IOT_RETURN_TO_HUB,
+        IOT_PRODUCT_DAMAGED
     }
 
     public Notification() {

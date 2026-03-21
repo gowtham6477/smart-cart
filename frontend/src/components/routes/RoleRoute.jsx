@@ -2,7 +2,11 @@ import { Navigate, Outlet } from 'react-router-dom';
 import useAuthStore from '../../stores/authStore';
 
 const RoleRoute = ({ role, children }) => {
-  const { isAuthenticated, hasRole } = useAuthStore();
+  const { isAuthenticated, hasRole, hasHydrated } = useAuthStore();
+
+  if (!hasHydrated) {
+    return null;
+  }
 
   if (!isAuthenticated) {
     return <Navigate to="/auth/login" replace />;

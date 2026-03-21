@@ -5,7 +5,7 @@ import useAuthStore from '../../stores/authStore';
 import { customerAPI } from '../../services/api';
 
 export default function Profile() {
-  const { user, setUser } = useAuthStore();
+  const { user, setUser, refreshProfile, isAuthenticated } = useAuthStore();
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -16,6 +16,12 @@ export default function Profile() {
     state: '',
     pincode: '',
   });
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      refreshProfile();
+    }
+  }, [isAuthenticated, refreshProfile]);
 
   useEffect(() => {
     if (user) {

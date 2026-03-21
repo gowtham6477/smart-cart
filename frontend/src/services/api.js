@@ -91,6 +91,9 @@ export const workerAPI = {
   // Dashboard
   getDashboardStats: () => apiClient.get('/employee/dashboard/stats'),
 
+  // IoT Events
+  getIoTEventsByEmployee: (employeeId) => apiClient.get(`/iot/events/employee/${employeeId}`),
+
   // Notifications
   getNotifications: () => apiClient.get('/employee/notifications'),
   getUnreadNotifications: () => apiClient.get('/employee/notifications/unread'),
@@ -101,6 +104,12 @@ export const workerAPI = {
   // Task Actions
   reportDamaged: (taskId) => apiClient.post(`/employee/tasks/${taskId}/report-damaged`),
   requestReplacement: (taskId) => apiClient.post(`/employee/tasks/${taskId}/request-replacement`),
+
+  // Replacement flow
+  validateReplacement: (data) => apiClient.post('/employee/replacements/validate', data),
+  createReplacement: (data) => apiClient.post('/employee/replacements', data),
+  getReplacements: () => apiClient.get('/employee/replacements'),
+  confirmReplacement: (requestId) => apiClient.post(`/employee/replacements/${requestId}/confirm`),
 };
 
 // Admin APIs
@@ -146,12 +155,95 @@ export const adminAPI = {
   getUnreadCount: () => apiClient.get('/admin/notifications/unread-count'),
   markAsRead: (id) => apiClient.put(`/admin/notifications/${id}/read`),
   markAllAsRead: () => apiClient.put('/admin/notifications/mark-all-read'),
+
+  // Replacement flow
+  getReplacementPolicy: () => apiClient.get('/admin/replacement-policy'),
+  updateReplacementPolicy: (data) => apiClient.put('/admin/replacement-policy', data),
+  getReplacementRequests: (params) => apiClient.get('/admin/replacements', { params }),
+  reviewReplacementRequest: (requestId, data) => apiClient.post(`/admin/replacements/${requestId}/review`, data),
+
+  // Inventory
+  getInventory: () => apiClient.get('/admin/inventory'),
+  updateInventory: (serviceId, data) => apiClient.put(`/admin/inventory/${serviceId}`, data),
 };
 
-// IoT APIs (Optional)
+// IoT APIs
 export const iotAPI = {
+  // ===== DEVICE MANAGEMENT =====
+  // Get all registered devices
+  getAllDevices: () => apiClient.get('/iot/devices'),
+  
+  // Get available devices (not assigned to any order)
+  getAvailableDevices: () => apiClient.get('/iot/devices/available'),
+  
+  // Get device by ID
+  getDevice: (deviceId) => apiClient.get(`/iot/devices/${deviceId}`),
+  
+  // Assign device to order
+  assignDeviceToOrder: (deviceId, orderId) => apiClient.post(`/iot/devices/${deviceId}/assign/${orderId}`),
+  
+  // Release device from order
+  releaseDevice: (orderId) => apiClient.post(`/iot/devices/release/${orderId}`),
+  
+  // Delete device
+  deleteDevice: (deviceId) => apiClient.delete(`/iot/devices/${deviceId}`),
+  
+  // Get device statistics
+  getDeviceStats: () => apiClient.get('/iot/devices/stats'),
+
+  // ===== EVENT MANAGEMENT =====
+  // Get all events
   getEvents: (params) => apiClient.get('/iot/events', { params }),
-  getAlerts: () => apiClient.get('/iot/alerts'),
+  
+  // Get unacknowledged events
+  getUnacknowledgedEvents: () => apiClient.get('/iot/events/unacknowledged'),
+  
+  // Get critical events
+  getCriticalEvents: () => apiClient.get('/iot/events/critical'),
+  
+  // Get events by device
+  getEventsByDevice: (deviceId) => apiClient.get(`/iot/events/device/${deviceId}`),
+  
+  // Get events by order
+  getEventsByOrder: (orderId) => apiClient.get(`/iot/events/order/${orderId}`),
+  
+  // Get event statistics
+  getStats: () => apiClient.get('/iot/events/stats'),
+  
+  // Acknowledge an event
+  acknowledgeEvent: (eventId, userId) => apiClient.put(`/iot/events/${eventId}/acknowledge`, {}, {
+    headers: { 'userId': userId }
+  }),
+
+  // ===== ORDER MANAGEMENT (Fall Recovery) =====
+  // Device heartbeat (for ESP32)
+  sendHeartbeat: (deviceId) => apiClient.post(`/iot/heartbeat/${deviceId}`),
+  
+  // Attach device to order (legacy)
+  attachDeviceToOrder: (orderId, deviceId) => apiClient.post(`/iot/orders/${orderId}/attach-device`, { deviceId }),
+  
+  // Get orders that need second attempt (had fall incidents)
+  getSecondAttemptOrders: () => apiClient.get('/iot/orders/second-attempt'),
+  
+  // Mark order as returned to hub after fall incident (Employee action)
+  markReturnedToHub: (orderId, reason = null) => apiClient.post(`/iot/orders/${orderId}/returned-to-hub`, reason ? { reason } : {}),
+  
+  // Restart delivery after replacement is ready (Admin action)
+  restartDelivery: (orderId) => apiClient.post(`/iot/orders/${orderId}/restart-delivery`),
+
+  // ============= CLEANUP FUNCTIONS (Admin only) =============
+  
+  // Clear all IoT events from database
+  clearAllEvents: () => apiClient.delete('/iot/events/clear-all'),
+  
+  // Reset all devices to available state
+  resetAllDevices: () => apiClient.post('/iot/devices/reset-all'),
+  
+  // Clear IoT data from all orders
+  clearIoTFromOrders: () => apiClient.post('/iot/orders/clear-iot'),
+  
+  // Full reset - clear all IoT related data
+  fullReset: () => apiClient.post('/iot/full-reset'),
 };
 
 // Admin Employee Management APIs

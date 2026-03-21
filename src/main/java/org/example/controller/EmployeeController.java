@@ -60,6 +60,9 @@ public class EmployeeController {
     @Autowired
     private NotificationService notificationService;
 
+    @Autowired
+    private ReplacementService replacementService;
+
     @GetMapping("/bookings")
     public ResponseEntity<ApiResponse<List<BookingResponse>>> getMyBookings(
             @RequestHeader("Authorization") String token) {
@@ -415,6 +418,41 @@ public class EmployeeController {
             return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
         }
     }
+
+    // Replacement flow
+    @PostMapping("/replacements/validate")
+    public ResponseEntity<ApiResponse<ReplacementValidationResponse>> validateReplacement(
+            @RequestBody ReplacementCreateRequest request) {
+        ReplacementValidationResponse validation = replacementService.validateReplacement(request);
+        return ResponseEntity.ok(ApiResponse.success("Replacement validated", validation));
+    }
+
+    @PostMapping("/replacements")
+    public ResponseEntity<ApiResponse<ReplacementRequest>> createReplacement(
+            @RequestHeader("Authorization") String token,
+            @RequestBody ReplacementCreateRequest request) {
+        String employeeId = extractEmployeeIdFromToken(token);
+        ReplacementRequest replacementRequest = replacementService.createReplacementRequest(employeeId, request);
+        return ResponseEntity.ok(ApiResponse.success("Replacement request created", replacementRequest));
+    }
+
+    @GetMapping("/replacements")
+    public ResponseEntity<ApiResponse<List<ReplacementRequest>>> getMyReplacements(
+            @RequestHeader("Authorization") String token) {
+        String employeeId = extractEmployeeIdFromToken(token);
+        List<ReplacementRequest> requests = replacementService.getEmployeeRequests(employeeId);
+        return ResponseEntity.ok(ApiResponse.success("Replacement requests retrieved", requests));
+    }
+
+    @PostMapping("/replacements/{requestId}/confirm")
+    public ResponseEntity<ApiResponse<ReplacementRequest>> confirmReplacement(
+            @RequestHeader("Authorization") String token,
+            @PathVariable String requestId) {
+        String employeeId = extractEmployeeIdFromToken(token);
+        ReplacementRequest request = replacementService.confirmReplacement(employeeId, requestId);
+        return ResponseEntity.ok(ApiResponse.success("Replacement applied", request));
+    }
+
 
     @PutMapping("/orders/{orderId}/status")
     public ResponseEntity<ApiResponse<org.example.dto.OrderResponse>> updateOrderStatus(

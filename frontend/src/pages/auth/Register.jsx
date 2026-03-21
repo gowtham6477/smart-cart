@@ -49,8 +49,23 @@ export default function Register() {
       return;
     }
 
-    if (formData.pincode && !/^[0-9]{6}$/.test(formData.pincode)) {
+    if (!formData.state?.trim()) {
+      toast.error('State is required');
+      return;
+    }
+
+    if (!formData.pincode?.trim()) {
+      toast.error('Pincode is required');
+      return;
+    }
+
+    if (!/^[0-9]{6}$/.test(formData.pincode)) {
       toast.error('Pincode must be exactly 6 digits');
+      return;
+    }
+
+    if (!formData.address?.trim()) {
+      toast.error('Address is required');
       return;
     }
 
@@ -189,7 +204,7 @@ export default function Register() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                State
+                State *
               </label>
               <input
                 type="text"
@@ -198,12 +213,13 @@ export default function Register() {
                 className="input"
                 placeholder="Karnataka"
                 maxLength={50}
+                required
               />
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Pincode
+                Pincode *
               </label>
               <input
                 type="text"
@@ -214,6 +230,7 @@ export default function Register() {
                 pattern="[0-9]{6}"
                 maxLength={6}
                 title="6 digit pincode"
+                required
               />
               <p className="mt-1 text-xs text-gray-500">6 digits only</p>
             </div>
@@ -221,7 +238,7 @@ export default function Register() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Address
+              Address *
             </label>
             <textarea
               value={formData.address}
@@ -230,6 +247,7 @@ export default function Register() {
               placeholder="Street, Area, Landmark"
               rows={2}
               maxLength={200}
+              required
             />
           </div>
 

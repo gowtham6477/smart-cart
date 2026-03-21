@@ -11,5 +11,10 @@ public class AuthResponse {
     private String name;
     private String role;
     private String userId;
+    private String mobile;
+    private String address;
+    private String city;
+    private String state;
+    private String pincode;
 }
 

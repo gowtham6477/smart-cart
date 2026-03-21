@@ -6,6 +6,7 @@ import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface IoTEventRepository extends MongoRepository<IoTEvent, String> {
@@ -13,6 +14,8 @@ public interface IoTEventRepository extends MongoRepository<IoTEvent, String> {
     List<IoTEvent> findByDeviceId(String deviceId);
 
     List<IoTEvent> findByEmployeeId(String employeeId);
+    
+    List<IoTEvent> findByOrderId(String orderId);
 
     List<IoTEvent> findByEventType(IoTEvent.EventType eventType);
 
@@ -25,5 +28,14 @@ public interface IoTEventRepository extends MongoRepository<IoTEvent, String> {
     List<IoTEvent> findByEventTypeAndAcknowledgedFalse(IoTEvent.EventType eventType, Boolean acknowledged);
 
     Long countByAcknowledgedFalse();
+    
+    // Find latest event for a device
+    Optional<IoTEvent> findTopByDeviceIdOrderByTimestampDesc(String deviceId);
+    
+    // Find unresolved offline events
+    List<IoTEvent> findByEventTypeAndOfflineEndTimeIsNull(IoTEvent.EventType eventType);
+    
+    // Find events by order
+    List<IoTEvent> findByOrderIdOrderByTimestampDesc(String orderId);
 }
 

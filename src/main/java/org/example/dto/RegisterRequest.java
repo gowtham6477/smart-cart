@@ -25,15 +25,18 @@ public class RegisterRequest {
     @Size(min = 6, max = 50, message = "Password must be between 6 and 50 characters")
     private String password;
 
+    @NotBlank(message = "Address is required")
     @Size(max = 200, message = "Address should not exceed 200 characters")
     private String address;
 
     @Size(max = 50, message = "City should not exceed 50 characters")
     private String city;
 
+    @NotBlank(message = "State is required")
     @Size(max = 50, message = "State should not exceed 50 characters")
     private String state;
 
+    @NotBlank(message = "Pincode is required")
     @Pattern(regexp = "^[0-9]{6}$", message = "Pincode must be exactly 6 digits")
     private String pincode;
 

@@ -39,6 +39,9 @@ public class TaskService {
     private NotificationService notificationService;
 
     @Autowired
+    private ReplacementService replacementService;
+
+    @Autowired
     private WalletService walletService;
 
     @Lazy
@@ -423,17 +426,22 @@ public class TaskService {
     @Transactional
     public TaskResponse requestReplacement(String taskId) {
         Task task = getTaskById(taskId);
-
-        // Update order status to DELAY_IN_DELIVERY
-        if (task.getOrderId() != null) {
-            orderRepository.findById(task.getOrderId()).ifPresent(order -> {
-                order.setStatus(Order.OrderStatus.DELAY_IN_DELIVERY);
-                orderRepository.save(order);
-            });
+        if (task.getOrderId() != null && task.getAssignedTo() != null) {
+            replacementService.createReplacementFromTask(
+                task.getAssignedTo(),
+                task.getOrderId(),
+                "Replacement requested from task " + task.getTaskNumber()
+            );
         }
 
         // Update task
+        task.setStatus(Task.TaskStatus.FAILED);
         task.setNotes("Replacement requested - Delivery delayed");
+        task.setIsLocked(true);
+        task.setLockReason("Replacement requested");
+        if (task.getCompletedAt() == null) {
+            task.setCompletedAt(LocalDateTime.now());
+        }
         taskRepository.save(task);
 
         return convertToTaskResponse(task);

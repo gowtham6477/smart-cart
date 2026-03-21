@@ -15,5 +15,6 @@ public interface TaskRepository extends MongoRepository<Task, String> {
     List<Task> findByAssignedToAndAssignedAtBetween(String employeeId, LocalDateTime start, LocalDateTime end);
     List<Task> findByIsLocked(Boolean isLocked);
     Long countByAssignedToAndStatus(String employeeId, Task.TaskStatus status);
+    List<Task> findByOrderId(String orderId);
 }
 

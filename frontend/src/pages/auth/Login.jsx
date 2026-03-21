@@ -21,9 +21,11 @@ export default function Login() {
       toast.success('Login successful!');
 
       // Redirect based on role
-      if (result.user.role === 'ADMIN') {
+      const role = result.user.role?.toUpperCase();
+
+      if (role === 'ADMIN') {
         navigate('/admin');
-      } else if (result.user.role === 'EMPLOYEE') {
+      } else if (role === 'EMPLOYEE') {
         navigate('/employee');
       } else {
         navigate('/');

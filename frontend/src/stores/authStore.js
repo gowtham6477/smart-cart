@@ -1,7 +1,12 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { authAPI } from '../services/api';
+import { authAPI, customerAPI } from '../services/api';
 import useCartStore from './cartStore';
+
+const normalizeRole = (role) => {
+  if (!role) return role;
+  return role.toString().toUpperCase().replace(/^ROLE_/, '');
+};
 
 const useAuthStore = create(
   persist(
@@ -10,15 +15,28 @@ const useAuthStore = create(
       accessToken: null,
       isAuthenticated: false,
       isLoading: false,
+      hasHydrated: false,
+
+      setHasHydrated: (value) => set({ hasHydrated: value }),
 
       // Login
       login: async (credentials) => {
         set({ isLoading: true });
         try {
           const response = await authAPI.login(credentials);
-          const { token, userId, email, name, role } = response.data.data;
+          const { token, userId, email, name, role, mobile, address, city, state, pincode } = response.data.data;
 
-          const user = { userId, email, name, role };
+          const user = {
+            userId,
+            email,
+            name,
+            role: normalizeRole(role),
+            mobile,
+            address,
+            city,
+            state,
+            pincode,
+          };
 
           localStorage.setItem('accessToken', token);
           localStorage.setItem('user', JSON.stringify(user));
@@ -42,9 +60,19 @@ const useAuthStore = create(
         set({ isLoading: true });
         try {
           const response = await authAPI.register(data);
-          const { token, userId, email, name, role } = response.data.data;
+          const { token, userId, email, name, role, mobile, address, city, state, pincode } = response.data.data;
 
-          const user = { userId, email, name, role };
+          const user = {
+            userId,
+            email,
+            name,
+            role: normalizeRole(role),
+            mobile,
+            address,
+            city,
+            state,
+            pincode,
+          };
 
           localStorage.setItem('accessToken', token);
           localStorage.setItem('user', JSON.stringify(user));
@@ -82,6 +110,10 @@ const useAuthStore = create(
         if (token && userStr) {
           try {
             const user = JSON.parse(userStr);
+            const normalizedUser = {
+              ...user,
+              role: normalizeRole(user?.role),
+            };
 
             // Check if token has userId - if not, force logout for token refresh
             if (!user.userId) {
@@ -97,7 +129,7 @@ const useAuthStore = create(
             }
 
             set({
-              user,
+              user: normalizedUser,
               accessToken: token,
               isAuthenticated: true,
             });
@@ -112,13 +144,43 @@ const useAuthStore = create(
       // Check if user has role
       hasRole: (role) => {
         const { user } = get();
-        return user?.role === role;
+  return normalizeRole(user?.role) === normalizeRole(role);
       },
 
       // Update user data
       setUser: (userData) => {
-        set({ user: userData });
-        localStorage.setItem('user', JSON.stringify(userData));
+        const normalizedUser = {
+          ...userData,
+          role: normalizeRole(userData?.role),
+        };
+        set({ user: normalizedUser });
+        localStorage.setItem('user', JSON.stringify(normalizedUser));
+      },
+
+      // Refresh profile from backend (customer role)
+      refreshProfile: async () => {
+        const { isAuthenticated, user } = get();
+        if (!isAuthenticated) return null;
+
+        try {
+          const response = await customerAPI.getProfile();
+          const profile = response.data?.data;
+          if (!profile) return null;
+
+          const updatedUser = {
+            ...user,
+            ...profile,
+            role: normalizeRole(profile?.role || user?.role),
+            userId: profile?.id || profile?.userId || user?.userId,
+          };
+
+          set({ user: updatedUser });
+          localStorage.setItem('user', JSON.stringify(updatedUser));
+          return updatedUser;
+        } catch (error) {
+          console.error('Failed to refresh profile:', error);
+          return null;
+        }
       },
     }),
     {
@@ -128,6 +190,9 @@ const useAuthStore = create(
         accessToken: state.accessToken,
         isAuthenticated: state.isAuthenticated,
       }),
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true);
+      },
     }
   )
 );

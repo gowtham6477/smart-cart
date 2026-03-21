@@ -81,12 +81,17 @@ export default function AppLayout({ children }) {
                     <Link to="/admin/orders" className="text-sm font-medium text-gray-700 hover:text-primary-600">Orders</Link>
                     <Link to="/admin/employees" className="text-sm font-medium text-gray-700 hover:text-primary-600">Employees</Link>
                     <Link to="/admin/tasks" className="text-sm font-medium text-gray-700 hover:text-primary-600">Tasks</Link>
+                    <Link to="/admin/iot-events" className="text-sm font-medium text-gray-700 hover:text-primary-600">IoT Events</Link>
+                    <Link to="/admin/replacements/requests" className="text-sm font-medium text-gray-700 hover:text-primary-600">Replacements</Link>
+                    <Link to="/admin/inventory" className="text-sm font-medium text-gray-700 hover:text-primary-600">Inventory</Link>
                   </>
                 )}
                 {isEmployee && (
                   <>
                     <Link to="/employee" className="text-sm font-medium text-gray-700 hover:text-primary-600">Dashboard</Link>
                     <Link to="/employee/orders" className="text-sm font-medium text-gray-700 hover:text-primary-600">Orders</Link>
+                    <Link to="/employee/replacements" className="text-sm font-medium text-gray-700 hover:text-primary-600">Replacements</Link>
+                    <Link to="/employee/iot-falls" className="text-sm font-medium text-gray-700 hover:text-primary-600">IoT Falls</Link>
                   </>
                 )}
               </nav>

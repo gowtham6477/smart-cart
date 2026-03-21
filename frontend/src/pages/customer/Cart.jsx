@@ -9,7 +9,7 @@ import toast from 'react-hot-toast';
 export default function Cart() {
   const navigate = useNavigate();
   const { items, updateQuantity, removeItem, clearCart, getTotal, loading: cartLoading, initCart, syncCart } = useCartStore();
-  const { user, isAuthenticated } = useAuthStore();
+  const { user, isAuthenticated, refreshProfile } = useAuthStore();
   const [loading, setLoading] = useState(false);
   const [couponCode, setCouponCode] = useState('');
   const [couponDiscount, setCouponDiscount] = useState(0);
@@ -116,15 +116,24 @@ export default function Cart() {
       return;
     }
 
+    let currentUser = user;
+
+    if (!currentUser?.mobile || !currentUser?.address || !currentUser?.city || !currentUser?.pincode) {
+      const refreshedUser = await refreshProfile();
+      if (refreshedUser) {
+        currentUser = refreshedUser;
+      }
+    }
+
     // Validate phone number
-    if (!user.mobile) {
+    if (!currentUser?.mobile) {
       toast.error('Please add your phone number in profile before ordering');
       navigate('/my/profile');
       return;
     }
 
     // Validate address
-    if (!user.address || !user.city || !user.pincode) {
+    if (!currentUser?.address || !currentUser?.city || !currentUser?.pincode) {
       toast.error('Please complete your delivery address in profile before ordering');
       navigate('/my/profile');
       return;
@@ -135,10 +144,10 @@ export default function Cart() {
     try {
       // Create order from cart
       const orderData = {
-        deliveryAddress: user.address,
-        city: user.city,
-        state: user.state || '',
-        pincode: user.pincode,
+  deliveryAddress: currentUser.address,
+  city: currentUser.city,
+  state: currentUser.state || '',
+  pincode: currentUser.pincode,
         customerNote: `Order with ${items.length} items`,
         couponCode: appliedCoupon || null,
         useWallet: useWallet && walletAmountToUse > 0,

@@ -42,6 +42,12 @@ public class AdminController {
     @Autowired
     private NotificationService notificationService;
 
+    @Autowired
+    private ReplacementService replacementService;
+
+    @Autowired
+    private InventoryService inventoryService;
+
     // Service Management
     @PostMapping("/services")
     public ResponseEntity<ApiResponse<Service>> createService(@Valid @RequestBody ServiceRequest request) {
@@ -189,6 +195,56 @@ public class AdminController {
     public ResponseEntity<ApiResponse<List<OrderResponse>>> getAllOrders() {
         List<OrderResponse> orders = orderService.getAllOrders();
         return ResponseEntity.ok(ApiResponse.success("Orders retrieved successfully", orders));
+    }
+
+    // Replacement Policy
+    @GetMapping("/replacement-policy")
+    public ResponseEntity<ApiResponse<ReplacementPolicy>> getReplacementPolicy() {
+        ReplacementPolicy policy = replacementService.getPolicy();
+        return ResponseEntity.ok(ApiResponse.success("Replacement policy retrieved", policy));
+    }
+
+    @PutMapping("/replacement-policy")
+    public ResponseEntity<ApiResponse<ReplacementPolicy>> updateReplacementPolicy(
+            @RequestBody ReplacementPolicyRequest request) {
+        ReplacementPolicy policy = replacementService.updatePolicy(request);
+        return ResponseEntity.ok(ApiResponse.success("Replacement policy updated", policy));
+    }
+
+    // Replacement Requests
+    @GetMapping("/replacements")
+    public ResponseEntity<ApiResponse<List<ReplacementRequest>>> getReplacementRequests(
+            @RequestParam(required = false) String status) {
+        List<ReplacementRequest> requests;
+        if (status != null && !status.isBlank()) {
+            requests = replacementService.getRequestsByStatus(ReplacementRequest.Status.valueOf(status));
+        } else {
+            requests = replacementService.getAllRequests();
+        }
+        return ResponseEntity.ok(ApiResponse.success("Replacement requests retrieved", requests));
+    }
+
+    @PostMapping("/replacements/{requestId}/review")
+    public ResponseEntity<ApiResponse<ReplacementRequest>> reviewReplacement(
+            @PathVariable String requestId,
+            @RequestBody ReplacementReviewRequest request,
+            @RequestHeader(value = "userId", required = false) String adminId) {
+        ReplacementRequest reviewed = replacementService.reviewRequest(requestId, adminId, request);
+        return ResponseEntity.ok(ApiResponse.success("Replacement request reviewed", reviewed));
+    }
+
+    // Inventory Management
+    @GetMapping("/inventory")
+    public ResponseEntity<ApiResponse<List<InventoryItem>>> getInventory() {
+        return ResponseEntity.ok(ApiResponse.success("Inventory retrieved", inventoryService.getAll()));
+    }
+
+    @PutMapping("/inventory/{serviceId}")
+    public ResponseEntity<ApiResponse<InventoryItem>> upsertInventory(
+            @PathVariable String serviceId,
+            @RequestBody InventoryUpdateRequest request) {
+        InventoryItem item = inventoryService.upsert(serviceId, request);
+        return ResponseEntity.ok(ApiResponse.success("Inventory updated", item));
     }
 
     @PutMapping("/orders/{orderId}/status")

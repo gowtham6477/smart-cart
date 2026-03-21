@@ -57,6 +57,7 @@ public class Order {
     // Additional fields
     private String customerNote;
     private String cancellationReason;
+    private String returnToHubReason;
 
     // Delivery tracking
     private String trackingNumber;
@@ -72,6 +73,21 @@ public class Order {
     // Rating & Review
     private Integer rating; // 1-5
     private String review;
+
+    // IoT Device Tracking
+    @Indexed
+    private String iotDeviceId;           // ESP32 device ID attached to this order
+    private Boolean iotDeviceActive = false; // Current device status
+    private LocalDateTime iotLastSeen;    // Last time device was active
+    
+    // Second attempt tracking (after FALL event)
+    private Boolean isSecondAttempt = false;  // Flag for orders that had a fall incident
+    private String previousIncidentNote;      // Note about previous incident
+    private Integer attemptCount = 1;         // Number of delivery attempts
+    
+    // Device offline tracking
+    private LocalDateTime deviceOfflineSince;
+    private Long totalOfflineMinutes = 0L;
 
     @CreatedDate
     private LocalDateTime createdAt;
@@ -90,6 +106,8 @@ public class Order {
         CANCELLED,
         REFUNDED,
         DAMAGED,
+        RETURNING_TO_HUB,    // After fall - employee returning
+        AWAITING_REPLACEMENT, // Waiting for replacement
         DELAY_IN_DELIVERY
     }
 
@@ -97,12 +115,16 @@ public class Order {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class OrderItem {
+        private String itemId;
         private String productId;
         private String productName;
         private String category;
         private Double price;
         private Integer quantity;
         private String imageUrl;
+        private Boolean replaced = false;
+        private String replacementRequestId;
+        private LocalDateTime replacedAt;
     }
 }
 

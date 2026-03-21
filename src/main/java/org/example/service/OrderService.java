@@ -72,16 +72,20 @@ public class OrderService {
         order.setCustomerMobile(customer.getMobile());
 
         // Convert cart items to order items
-        List<Order.OrderItem> orderItems = cart.getItems().stream()
-                .map(cartItem -> new Order.OrderItem(
-                        cartItem.getServiceId(),
-                        cartItem.getServiceName(),
-                        cartItem.getCategory(),
-                        cartItem.getPrice(),
-                        cartItem.getQuantity(),
-                        null
-                ))
-                .collect(Collectors.toList());
+    List<Order.OrderItem> orderItems = cart.getItems().stream()
+        .map(cartItem -> new Order.OrderItem(
+            "ITEM-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase(),
+            cartItem.getServiceId(),
+            cartItem.getServiceName(),
+            cartItem.getCategory(),
+            cartItem.getPrice(),
+            cartItem.getQuantity(),
+            null,
+            false,
+            null,
+            null
+        ))
+        .collect(Collectors.toList());
 
         order.setItems(orderItems);
 
@@ -165,9 +169,12 @@ public class OrderService {
     }
 
     public List<OrderResponse> getEmployeeOrders(String employeeId) {
-        return orderRepository.findByEmployeeIdOrderByCreatedAtDesc(employeeId).stream()
-                .map(this::mapToResponse)
-                .collect(Collectors.toList());
+    return orderRepository.findByEmployeeIdOrderByCreatedAtDesc(employeeId).stream()
+                .collect(Collectors.toMap(order -> order.getOrderNumber() != null ? order.getOrderNumber() : order.getId(), order -> order, (a, b) -> a))
+        .values()
+        .stream()
+        .map(this::mapToResponse)
+        .collect(Collectors.toList());
     }
 
     public List<OrderResponse> getAllOrders() {
@@ -355,6 +362,7 @@ public class OrderService {
     }
 
     private OrderResponse mapToResponse(Order order) {
+        ensureItemIds(order);
         OrderResponse response = new OrderResponse();
         response.setId(order.getId());
         response.setOrderNumber(order.getOrderNumber());
@@ -375,6 +383,7 @@ public class OrderService {
         response.setCouponCode(order.getCouponCode());
         response.setStatus(order.getStatus().name());
         response.setCustomerNote(order.getCustomerNote());
+    response.setReturnToHubReason(order.getReturnToHubReason());
         response.setTrackingNumber(order.getTrackingNumber());
         response.setEstimatedDelivery(order.getEstimatedDelivery());
         response.setDeliveredAt(order.getDeliveredAt());
@@ -387,6 +396,25 @@ public class OrderService {
         response.setCreatedAt(order.getCreatedAt());
         response.setUpdatedAt(order.getUpdatedAt());
         return response;
+    }
+
+    private void ensureItemIds(Order order) {
+        boolean updated = false;
+        if (order.getItems() != null) {
+            for (Order.OrderItem item : order.getItems()) {
+                if (item.getItemId() == null || item.getItemId().isBlank()) {
+                    item.setItemId("ITEM-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase());
+                    updated = true;
+                }
+                if (item.getReplaced() == null) {
+                    item.setReplaced(false);
+                    updated = true;
+                }
+            }
+        }
+        if (updated) {
+            orderRepository.save(order);
+        }
     }
 }
 

@@ -26,6 +26,9 @@ public class IoTEvent {
     @Indexed
     private String employeeId;
 
+    @Indexed
+    private String orderId;
+
     private String bookingId;
 
     @Indexed
@@ -48,18 +51,24 @@ public class IoTEvent {
 
     private LocalDateTime acknowledgedAt;
 
+    // For DEVICE_OFFLINE tracking
+    private LocalDateTime offlineStartTime;
+    private LocalDateTime offlineEndTime;
+    private Long offlineDurationMinutes;
+
     @CreatedDate
     @Indexed
     private LocalDateTime timestamp;
 
     public enum EventType {
-        SOS,
-        FALL,
-        INACTIVITY,
-        IMPACT,
-        LOW_BATTERY,
-        DEVICE_OFFLINE,
-        ABNORMAL_MOVEMENT
+        FALL,           // Product fell - notify employee to return, customer about damage
+        DEVICE_OFFLINE, // Device turned off - track inactive time
+        IMPACT,         // Impact detected - warn employee to be careful
+        ABNORMAL_MOVEMENT, // Unusual movement - warn employee
+        // Legacy types (kept for backward compatibility with existing data)
+        @Deprecated SOS,
+        @Deprecated LOW_BATTERY,
+        @Deprecated INACTIVITY
     }
 
     public enum EventSeverity {

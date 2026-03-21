@@ -3,9 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import {
   ClipboardList, Clock, CheckCircle, AlertCircle, TrendingUp,
   Calendar, MapPin, Upload, Image as ImageIcon, PlayCircle,
-  StopCircle, Award, Activity, User, PackageX, RefreshCw
+  StopCircle, Award, Activity, User, RefreshCw, RotateCcw
 } from 'lucide-react';
-import { workerAPI } from '../../services/api';
+import { workerAPI, iotAPI } from '../../services/api';
 import toast from 'react-hot-toast';
 import NotificationBell from '../../components/NotificationBell';
 
@@ -26,6 +26,7 @@ const PRIORITY_CONFIG = {
 
 export default function EmployeeDashboard() {
   const navigate = useNavigate();
+  const notifiedEventsRef = useRef(new Set());
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState(null);
   const [tasks, setTasks] = useState([]);
@@ -33,6 +34,30 @@ export default function EmployeeDashboard() {
   const [selectedTask, setSelectedTask] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [imageType, setImageType] = useState('BEFORE');
+  const handleReturnedToHub = async (task) => {
+    if (!task?.orderId) {
+      toast.error('Order information missing for this task');
+      return;
+    }
+
+    const reason = window.prompt('Enter reason for returning to hub (fall incident):');
+    if (reason === null) {
+      return;
+    }
+
+    if (!reason.trim()) {
+      toast.error('Return reason is required');
+      return;
+    }
+
+    try {
+      await iotAPI.markReturnedToHub(task.orderId, reason.trim());
+      toast.success('Marked as returned to hub');
+      loadDashboardData();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to mark returned to hub');
+    }
+  };
 
   useEffect(() => {
     loadDashboardData();
@@ -67,10 +92,37 @@ export default function EmployeeDashboard() {
       // Load tasks
       try {
         const tasksRes = await workerAPI.getTasks();
-        setTasks(tasksRes.data.data || []);
+        const rawTasks = tasksRes.data.data || [];
+        const filtered = rawTasks.filter(task => {
+          const notes = typeof task.notes === 'string' ? task.notes.toLowerCase() : '';
+          const reason = typeof task.lockReason === 'string' ? task.lockReason.toLowerCase() : '';
+          const isReplacement = reason.includes('replacement') || notes.includes('replacement');
+          return !isReplacement;
+        });
+        const uniqueTasks = Array.from(new Map(filtered.map(task => [task.orderId || task.id, task])).values());
+        setTasks(uniqueTasks);
       } catch (error) {
         console.error('Failed to load tasks:', error);
         setTasks([]);
+      }
+
+      // Load IoT events and notify employee
+      try {
+        if (stats?.employeeId || user?.id) {
+          const employeeId = stats?.employeeId || user?.id;
+          const eventsRes = await workerAPI.getIoTEventsByEmployee(employeeId);
+          const events = eventsRes.data || [];
+          events
+            .filter(event => event.eventType === 'FALL')
+            .forEach(event => {
+              if (!notifiedEventsRef.current.has(event.id)) {
+                notifiedEventsRef.current.add(event.id);
+                toast.error(`IoT FALL detected for order ${event.orderId || ''}`.trim());
+              }
+            });
+        }
+      } catch (error) {
+        console.error('Failed to load IoT events:', error);
       }
 
       // Load today's attendance
@@ -229,7 +281,22 @@ export default function EmployeeDashboard() {
     );
   }
 
-  const activeTasks = tasks.filter(t => t.status === 'ASSIGNED' || t.status === 'IN_PROGRESS');
+  const getTaskUpdatedAt = (task) => {
+    const candidates = [task.updatedAt, task.completedAt, task.startedAt, task.assignedAt, task.createdAt];
+    const value = candidates.find((date) => !!date);
+    return value ? new Date(value).getTime() : 0;
+  };
+
+  const activeTasks = tasks.filter(t => ['PENDING', 'ASSIGNED', 'IN_PROGRESS'].includes(t.status));
+  const sortedActiveTasks = [...activeTasks].sort((a, b) => getTaskUpdatedAt(b) - getTaskUpdatedAt(a));
+  const inProgressTask = sortedActiveTasks.find(task => task.status === 'IN_PROGRESS');
+  const isInProgressFallDetected = inProgressTask
+    ? inProgressTask?.isLocked || inProgressTask?.lockReason?.toLowerCase()?.includes('fall')
+    : false;
+  const activeTaskList = inProgressTask
+    ? [inProgressTask, ...sortedActiveTasks.filter(task => task.id !== inProgressTask.id)]
+    : sortedActiveTasks;
+  const latestActiveTasks = activeTaskList.slice(0, 2);
   const completedToday = tasks.filter(t =>
     t.status === 'COMPLETED' &&
     new Date(t.completedAt).toDateString() === new Date().toDateString()
@@ -349,7 +416,7 @@ export default function EmployeeDashboard() {
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
           <h2 className="text-xl font-bold text-gray-900 mb-6">Your Tasks</h2>
 
-          {activeTasks.length === 0 ? (
+          {latestActiveTasks.length === 0 ? (
             <div className="text-center py-12">
               <ClipboardList className="w-16 h-16 text-gray-300 mx-auto mb-4" />
               <p className="text-gray-500 text-lg">No active tasks</p>
@@ -357,7 +424,7 @@ export default function EmployeeDashboard() {
             </div>
           ) : (
             <div className="space-y-4">
-              {activeTasks.map(task => (
+              {latestActiveTasks.map(task => (
                 <TaskCard
                   key={task.id}
                   task={task}
@@ -365,9 +432,10 @@ export default function EmployeeDashboard() {
                   onUpdateStatus={handleUpdateTaskStatus}
                   onUploadImage={handleImageUpload}
                   onViewDetails={() => setSelectedTask(task)}
-                  onReportDamaged={handleReportDamaged}
                   onRequestReplacement={handleRequestReplacement}
+                  onReturnedToHub={handleReturnedToHub}
                   uploading={uploading}
+                  isLockedExternally={!!inProgressTask && !isInProgressFallDetected && inProgressTask.id !== task.id && !task.isLocked}
                 />
               ))}
             </div>
@@ -440,9 +508,20 @@ function MetricCard({ label, value }) {
   );
 }
 
-function TaskCard({ task, onAccept, onUpdateStatus, onUploadImage, onReportDamaged, onRequestReplacement, uploading }) {
+function TaskCard({
+  task,
+  onAccept,
+  onUpdateStatus,
+  onUploadImage,
+  onRequestReplacement,
+  onReturnedToHub,
+  uploading,
+  isLockedExternally,
+}) {
   const [showImageUpload, setShowImageUpload] = useState(false);
   const StatusIcon = TASK_STATUS_CONFIG[task.status]?.icon || Clock;
+  const isFallDetected = task?.isLocked || task?.lockReason?.toLowerCase()?.includes('fall');
+  const isLocked = isLockedExternally && !isFallDetected;
 
   // Check if both before and after images are uploaded
   const hasBeforeImage = task.beforeImages && task.beforeImages.length > 0;
@@ -450,7 +529,12 @@ function TaskCard({ task, onAccept, onUpdateStatus, onUploadImage, onReportDamag
   const canComplete = hasBeforeImage && hasAfterImage;
 
   return (
-    <div className="border border-gray-200 rounded-lg p-6 hover:shadow-md transition">
+    <div className={`border rounded-lg p-6 transition ${isLocked ? 'border-yellow-200 bg-yellow-50/40' : 'border-gray-200 hover:shadow-md'}`}>
+      {isLocked && (
+        <div className="mb-4 p-3 bg-yellow-100 border border-yellow-200 rounded-lg text-sm text-yellow-800">
+          Another task is in progress. Finish that task before starting this one.
+        </div>
+      )}
       <div className="flex items-start justify-between mb-4">
         <div className="flex-1">
           <div className="flex items-center gap-3 mb-2">
@@ -466,7 +550,7 @@ function TaskCard({ task, onAccept, onUpdateStatus, onUploadImage, onReportDamag
         </div>
         <span className={`px-3 py-1 rounded-full text-sm font-semibold flex items-center gap-2 ${TASK_STATUS_CONFIG[task.status]?.color}`}>
           <StatusIcon className="w-4 h-4" />
-          {TASK_STATUS_CONFIG[task.status]?.label}
+          {isFallDetected ? 'Damaged (IoT)' : TASK_STATUS_CONFIG[task.status]?.label}
         </span>
       </div>
 
@@ -540,13 +624,16 @@ function TaskCard({ task, onAccept, onUpdateStatus, onUploadImage, onReportDamag
 
       {/* Action Buttons */}
       <div className="flex gap-3 flex-wrap">
-        {task.status === 'ASSIGNED' && (
+        {(task.status === 'ASSIGNED' || task.status === 'PENDING') && (
           <button
             onClick={() => onAccept(task.id)}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 flex items-center gap-2"
+            disabled={isLocked}
+            className={`px-4 py-2 rounded-lg font-semibold flex items-center gap-2 ${
+              isLocked ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'
+            }`}
           >
             <PlayCircle className="w-4 h-4" />
-            Accept & Start
+            {task.status === 'PENDING' ? 'Start Task' : 'Accept & Start'}
           </button>
         )}
 
@@ -561,24 +648,22 @@ function TaskCard({ task, onAccept, onUpdateStatus, onUploadImage, onReportDamag
             </button>
             <button
               onClick={() => onUpdateStatus(task.id, 'COMPLETED')}
-              disabled={!canComplete}
-              className={`px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition ${
-                canComplete
-                  ? 'bg-green-600 text-white hover:bg-green-700'
-                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              }`}
-              title={!canComplete ? 'Please upload both BEFORE and AFTER images first' : 'Mark task as complete'}
+              className="px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition bg-green-600 text-white hover:bg-green-700"
+              title="Mark task as complete"
             >
               <CheckCircle className="w-4 h-4" />
               Complete
             </button>
             <button
-              onClick={() => onReportDamaged(task.id)}
-              className="px-4 py-2 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 flex items-center gap-2"
-              title="Report product as damaged - Customer will be refunded"
+              onClick={() => onReturnedToHub(task)}
+              disabled={!isFallDetected}
+              className={`px-4 py-2 rounded-lg font-semibold flex items-center gap-2 ${
+                isFallDetected ? 'bg-orange-600 text-white hover:bg-orange-700' : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              }`}
+              title={isFallDetected ? 'Return to hub after fall incident' : 'Only available when fall is detected'}
             >
-              <PackageX className="w-4 h-4" />
-              Damaged
+              <RotateCcw className="w-4 h-4" />
+              Returned to Hub
             </button>
             <button
               onClick={() => onRequestReplacement(task.id)}
@@ -593,13 +678,11 @@ function TaskCard({ task, onAccept, onUpdateStatus, onUploadImage, onReportDamag
       </div>
 
       {/* Upload Status Indicator */}
-      {task.status === 'IN_PROGRESS' && !canComplete && (
+      {task.status === 'IN_PROGRESS' && (
         <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
           <p className="text-sm text-yellow-800 flex items-center gap-2">
             <AlertCircle className="w-4 h-4" />
-            {!hasBeforeImage && !hasAfterImage && 'Upload BEFORE and AFTER images to complete this task'}
-            {hasBeforeImage && !hasAfterImage && '✓ Before image uploaded. Upload AFTER image to continue'}
-            {!hasBeforeImage && hasAfterImage && '✓ After image uploaded. Upload BEFORE image to continue'}
+            Uploading images is optional for this task.
           </p>
         </div>
       )}
@@ -612,7 +695,7 @@ function TaskCard({ task, onAccept, onUpdateStatus, onUploadImage, onReportDamag
             Upload Proof Images
           </h4>
           <p className="text-sm text-gray-600 mb-4">
-            Both BEFORE and AFTER images are required to complete the task
+            Upload BEFORE/AFTER images if needed (optional)
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <ImageUploadButton

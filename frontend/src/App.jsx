@@ -26,6 +26,8 @@ import Profile from './pages/customer/Profile';
 // Employee Pages
 import EmployeeDashboard from './pages/employee/Dashboard';
 import EmployeeOrders from './pages/employee/Orders';
+import EmployeeReplacementRequests from './pages/employee/ReplacementRequests';
+import EmployeeIoTFallOrders from './pages/employee/IoTFallOrders';
 
 // Admin Pages
 import AdminDashboard from './pages/admin/Dashboard';
@@ -40,10 +42,15 @@ import AdminOrders from './pages/admin/Orders';
 import AdminCoupons from './pages/admin/Coupons';
 import AdminPayments from './pages/admin/Payments';
 import AdminBookings from './pages/admin/Bookings';
+import IoTEvents from './pages/admin/IoTEvents';
+import ReplacementSettings from './pages/admin/ReplacementSettings';
+import ReplacementRequests from './pages/admin/ReplacementRequests';
+import Inventory from './pages/admin/Inventory';
 
 // Components
 import PrivateRoute from './components/routes/PrivateRoute';
 import RoleRoute from './components/routes/RoleRoute';
+import HomeRedirect from './components/routes/HomeRedirect';
 import NotFound from './pages/NotFound';
 
 // Create QueryClient
@@ -73,7 +80,7 @@ function App() {
           <Route path="/auth/register" element={<AuthLayout><Register /></AuthLayout>} />
 
           {/* Public Product Routes */}
-          <Route path="/" element={<AppLayout><Home /></AppLayout>} />
+          <Route path="/" element={<AppLayout><HomeRedirect /></AppLayout>} />
           <Route path="/products" element={<AppLayout><ProductList /></AppLayout>} />
           <Route path="/products/category/:category" element={<AppLayout><ProductList /></AppLayout>} />
           <Route path="/products/:id" element={<AppLayout><ProductDetail /></AppLayout>} />
@@ -126,6 +133,22 @@ function App() {
             element={
               <RoleRoute role="EMPLOYEE">
                 <AppLayout><EmployeeOrders /></AppLayout>
+              </RoleRoute>
+            }
+          />
+          <Route
+            path="/employee/replacements"
+            element={
+              <RoleRoute role="EMPLOYEE">
+                <AppLayout><EmployeeReplacementRequests /></AppLayout>
+              </RoleRoute>
+            }
+          />
+          <Route
+            path="/employee/iot-falls"
+            element={
+              <RoleRoute role="EMPLOYEE">
+                <AppLayout><EmployeeIoTFallOrders /></AppLayout>
               </RoleRoute>
             }
           />
@@ -224,6 +247,38 @@ function App() {
             element={
               <RoleRoute role="ADMIN">
                 <AppLayout><AdminPayments /></AppLayout>
+              </RoleRoute>
+            }
+          />
+          <Route
+            path="/admin/iot-events"
+            element={
+              <RoleRoute role="ADMIN">
+                <AppLayout><IoTEvents /></AppLayout>
+              </RoleRoute>
+            }
+          />
+          <Route
+            path="/admin/inventory"
+            element={
+              <RoleRoute role="ADMIN">
+                <AppLayout><Inventory /></AppLayout>
+              </RoleRoute>
+            }
+          />
+          <Route
+            path="/admin/replacements/settings"
+            element={
+              <RoleRoute role="ADMIN">
+                <AppLayout><ReplacementSettings /></AppLayout>
+              </RoleRoute>
+            }
+          />
+          <Route
+            path="/admin/replacements/requests"
+            element={
+              <RoleRoute role="ADMIN">
+                <AppLayout><ReplacementRequests /></AppLayout>
               </RoleRoute>
             }
           />

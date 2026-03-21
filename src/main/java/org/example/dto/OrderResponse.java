@@ -31,6 +31,7 @@ public class OrderResponse {
     private String couponCode;
     private String status;
     private String customerNote;
+    private String returnToHubReason;
     private String trackingNumber;
     private LocalDateTime estimatedDelivery;
     private LocalDateTime deliveredAt;

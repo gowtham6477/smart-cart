@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Loader2, AlertCircle, ShoppingBag, X, Package, Truck, CheckCircle, Clock, XCircle, ChevronRight, UserPlus, User, RefreshCw } from 'lucide-react';
-import { adminAPI, employeeAPI } from '../../services/api';
+import { Loader2, AlertCircle, ShoppingBag, X, Package, Truck, CheckCircle, Clock, XCircle, ChevronRight, UserPlus, User, RefreshCw, Wifi, WifiOff, AlertTriangle, RotateCcw } from 'lucide-react';
+import { adminAPI, employeeAPI, iotAPI } from '../../services/api';
 import toast from 'react-hot-toast';
 
 const ORDER_STATUSES = [
@@ -12,6 +12,9 @@ const ORDER_STATUSES = [
   { value: 'DELIVERED', label: 'Delivered', color: 'bg-green-100 text-green-700', icon: CheckCircle },
   { value: 'CANCELLED', label: 'Cancelled', color: 'bg-red-100 text-red-700', icon: XCircle },
   { value: 'REFUNDED', label: 'Refunded', color: 'bg-gray-100 text-gray-700', icon: XCircle },
+  { value: 'RETURNING_TO_HUB', label: 'Returning to Hub', color: 'bg-red-100 text-red-700', icon: AlertTriangle },
+  { value: 'AWAITING_REPLACEMENT', label: 'Awaiting Replacement', color: 'bg-purple-100 text-purple-700', icon: RotateCcw },
+  { value: 'DAMAGED', label: 'Damaged', color: 'bg-red-100 text-red-700', icon: XCircle },
 ];
 
 export default function AdminOrders() {
@@ -138,6 +141,28 @@ export default function AdminOrders() {
     setShowAssignModal(true);
   };
 
+  // Restart delivery for orders in AWAITING_REPLACEMENT status
+  const handleRestartDelivery = async (orderId) => {
+    try {
+      setUpdatingStatus(true);
+      await iotAPI.restartDelivery(orderId);
+      toast.success('Delivery restarted! Employee and customer have been notified.');
+      
+      // Update local state
+      setOrders(orders.map(o =>
+        o.id === orderId ? { ...o, status: 'ASSIGNED' } : o
+      ));
+
+      // Reload orders to get latest data
+      await loadOrders();
+    } catch (error) {
+      console.error('Restart delivery error:', error);
+      toast.error(error.response?.data?.message || 'Failed to restart delivery');
+    } finally {
+      setUpdatingStatus(false);
+    }
+  };
+
   const getStatusConfig = (status) => {
     return ORDER_STATUSES.find(s => s.value === status) || ORDER_STATUSES[0];
   };
@@ -213,6 +238,7 @@ export default function AdminOrders() {
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Customer</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Items</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">IoT Device</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Assigned To</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Total</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Date</th>
@@ -270,6 +296,36 @@ export default function AdminOrders() {
                           </option>
                         ))}
                       </select>
+                      {order.isSecondAttempt && (
+                        <div className="flex items-center gap-1 mt-1 text-xs text-orange-600">
+                          <AlertTriangle className="w-3 h-3" />
+                          2nd Attempt
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {order.iotDeviceId ? (
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center gap-2">
+                            {order.iotDeviceActive ? (
+                              <Wifi className="w-4 h-4 text-green-500" />
+                            ) : (
+                              <WifiOff className="w-4 h-4 text-red-500" />
+                            )}
+                            <span className="font-mono text-xs">{order.iotDeviceId}</span>
+                          </div>
+                          <span className={`text-xs ${order.iotDeviceActive ? 'text-green-600' : 'text-red-600'}`}>
+                            {order.iotDeviceActive ? 'Active' : 'Offline'}
+                          </span>
+                          {order.totalOfflineMinutes > 0 && (
+                            <span className="text-xs text-orange-500">
+                              Offline: {order.totalOfflineMinutes}m total
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-gray-400">No device</span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       {order.employeeId ? (
@@ -307,13 +363,27 @@ export default function AdminOrders() {
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <button
-                        onClick={() => handleViewDetails(order)}
-                        className="text-primary-600 hover:text-primary-700 font-medium text-sm flex items-center gap-1"
-                      >
-                        Details
-                        <ChevronRight className="w-4 h-4" />
-                      </button>
+                      <div className="flex flex-col gap-2">
+                        <button
+                          onClick={() => handleViewDetails(order)}
+                          className="text-primary-600 hover:text-primary-700 font-medium text-sm flex items-center gap-1"
+                        >
+                          Details
+                          <ChevronRight className="w-4 h-4" />
+                        </button>
+                        
+                        {/* Show Restart Delivery button for AWAITING_REPLACEMENT status */}
+                        {order.status === 'AWAITING_REPLACEMENT' && (
+                          <button
+                            onClick={() => handleRestartDelivery(order.id)}
+                            disabled={updatingStatus}
+                            className="px-3 py-1.5 bg-green-600 text-white text-xs font-semibold rounded-lg hover:bg-green-700 flex items-center gap-1 disabled:opacity-50"
+                          >
+                            <RotateCcw className="w-3 h-3" />
+                            Restart Delivery
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -343,6 +413,56 @@ export default function AdminOrders() {
 
             {/* Modal Content */}
             <div className="p-6 space-y-6">
+              {/* Alert for AWAITING_REPLACEMENT status */}
+              {selectedOrder.status === 'AWAITING_REPLACEMENT' && (
+                <div className="bg-purple-50 border-2 border-purple-300 rounded-xl p-6">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center">
+                      <RotateCcw className="w-7 h-7 text-purple-600" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold text-purple-700">Awaiting Replacement</h3>
+                      <p className="text-purple-600">This order had a fall incident. Prepare replacement and restart delivery.</p>
+                    </div>
+                  </div>
+                  {selectedOrder.previousIncidentNote && (
+                    <div className="bg-white rounded-lg p-4 mb-4">
+                      <p className="text-sm font-medium text-gray-700">Incident Note:</p>
+                      <p className="text-sm text-gray-600 mt-1">{selectedOrder.previousIncidentNote}</p>
+                    </div>
+                  )}
+                  <button
+                    onClick={() => {
+                      handleRestartDelivery(selectedOrder.id);
+                      setShowDetailModal(false);
+                    }}
+                    disabled={updatingStatus}
+                    className="w-full py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-bold flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    <RotateCcw className="w-5 h-5" />
+                    {updatingStatus ? 'Restarting...' : 'Restart Delivery'}
+                  </button>
+                  <p className="text-xs text-purple-600 text-center mt-2">
+                    This will notify the employee and customer that delivery is resuming.
+                  </p>
+                </div>
+              )}
+
+              {/* Alert for RETURNING_TO_HUB status */}
+              {selectedOrder.status === 'RETURNING_TO_HUB' && (
+                <div className="bg-red-50 border-2 border-red-300 rounded-xl p-6">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                      <AlertTriangle className="w-7 h-7 text-red-600" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold text-red-700">⚠️ Fall Detected - Returning to Hub</h3>
+                      <p className="text-red-600">Employee is returning to hub with this order due to a fall incident.</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Status Section */}
               <div className="bg-gray-50 rounded-lg p-4">
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
