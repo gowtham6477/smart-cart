@@ -76,7 +76,6 @@ export default function IoTEvents() {
   const [selectedOrderId, setSelectedOrderId] = useState('');
   const [lastEventCount, setLastEventCount] = useState(0);
   const [activeTab, setActiveTab] = useState('devices');
-  const audioRef = useRef(null);
 
   const fetchEvents = async () => {
     try {
@@ -92,12 +91,7 @@ export default function IoTEvents() {
       if (filter === 'fall') {
         newEvents = newEvents.filter(e => e.eventType === 'FALL');
       }
-      if (newEvents.length > lastEventCount) {
-        const latestEvent = newEvents[0];
-        if (latestEvent && latestEvent.eventType === 'FALL' && !latestEvent.acknowledged) {
-          showAlertNotification(latestEvent);
-        }
-      }
+      // Alerts handled globally via notification bell
       setLastEventCount(newEvents.length);
       setEvents(newEvents);
     } catch (error) {
@@ -158,31 +152,6 @@ export default function IoTEvents() {
     }
   };
 
-  const showAlertNotification = (event) => {
-    if (audioRef.current) {
-      audioRef.current.play().catch(() => {});
-    }
-    toast.custom((t) => (
-      <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} max-w-md w-full bg-red-600 text-white shadow-lg rounded-lg pointer-events-auto flex ring-1 ring-black ring-opacity-5`}>
-        <div className="flex-1 w-0 p-4">
-          <div className="flex items-start">
-            <AlertTriangle className="w-10 h-10 text-white animate-pulse" />
-            <div className="ml-3 flex-1">
-              <p className="text-lg font-bold">🚨 {event.eventType} DETECTED!</p>
-              <p className="mt-1 text-sm text-red-100">Device: {event.deviceId}</p>
-              {event.orderId && <p className="text-sm text-red-100">Order: {event.orderId}</p>}
-              <p className="text-sm text-red-100">{getEventDescription(event.eventType)}</p>
-            </div>
-          </div>
-        </div>
-        <div className="flex border-l border-red-500">
-          <button onClick={() => toast.dismiss(t.id)} className="w-full border border-transparent rounded-none rounded-r-lg p-4 flex items-center justify-center text-sm font-medium text-red-100 hover:text-white focus:outline-none">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-      </div>
-    ), { duration: 10000 });
-  };
 
   const loadData = async () => {
     setLoading(true);
@@ -274,7 +243,6 @@ export default function IoTEvents() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
-      <audio ref={audioRef} src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2teleAsffLvf/9BtABVtr/P/sT8A" />
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">IoT Device Management</h1>
@@ -293,9 +261,9 @@ export default function IoTEvents() {
         </div>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
-        <div className="bg-white rounded-xl shadow p-4 border-l-4 border-blue-500"><div className="flex justify-between items-center"><div><p className="text-gray-500 text-sm">Total Devices</p><p className="text-2xl font-bold">{deviceStats?.total || devices.length}</p></div><Smartphone className="w-10 h-10 text-blue-500" /></div></div>
-        <div className="bg-white rounded-xl shadow p-4 border-l-4 border-green-500"><div className="flex justify-between items-center"><div><p className="text-gray-500 text-sm">Available</p><p className="text-2xl font-bold">{deviceStats?.available || 0}</p></div><CheckCircle className="w-10 h-10 text-green-500" /></div></div>
-        <div className="bg-white rounded-xl shadow p-4 border-l-4 border-purple-500"><div className="flex justify-between items-center"><div><p className="text-gray-500 text-sm">Assigned</p><p className="text-2xl font-bold">{deviceStats?.assigned || 0}</p></div><Link className="w-10 h-10 text-purple-500" /></div></div>
+  <div className="bg-white rounded-xl shadow p-4 border-l-4 border-blue-500"><div className="flex justify-between items-center"><div><p className="text-gray-500 text-sm">Total Devices</p><p className="text-2xl font-bold">{deviceStats?.totalDevices || devices.length}</p></div><Smartphone className="w-10 h-10 text-blue-500" /></div></div>
+  <div className="bg-white rounded-xl shadow p-4 border-l-4 border-green-500"><div className="flex justify-between items-center"><div><p className="text-gray-500 text-sm">Available</p><p className="text-2xl font-bold">{deviceStats?.availableDevices || 0}</p></div><CheckCircle className="w-10 h-10 text-green-500" /></div></div>
+  <div className="bg-white rounded-xl shadow p-4 border-l-4 border-purple-500"><div className="flex justify-between items-center"><div><p className="text-gray-500 text-sm">Assigned</p><p className="text-2xl font-bold">{deviceStats?.assignedDevices || 0}</p></div><Link className="w-10 h-10 text-purple-500" /></div></div>
         <div className="bg-white rounded-xl shadow p-4 border-l-4 border-red-500"><div className="flex justify-between items-center"><div><p className="text-gray-500 text-sm">Fall Events</p><p className="text-2xl font-bold">{stats?.eventsByType?.FALL || 0}</p></div><AlertTriangle className="w-10 h-10 text-red-500" /></div></div>
         <div className="bg-white rounded-xl shadow p-4 border-l-4 border-orange-500"><div className="flex justify-between items-center"><div><p className="text-gray-500 text-sm">Second Attempts</p><p className="text-2xl font-bold">{secondAttemptOrders.length}</p></div><RotateCcw className="w-10 h-10 text-orange-500" /></div></div>
       </div>

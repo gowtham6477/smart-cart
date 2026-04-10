@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Loader2, AlertCircle, ShoppingBag, X, Package, Truck, CheckCircle, Clock, XCircle, ChevronRight, UserPlus, User, RefreshCw, Wifi, WifiOff, AlertTriangle, RotateCcw } from 'lucide-react';
+import { Loader2, AlertCircle, ShoppingBag, X, Package, Truck, CheckCircle, Clock, XCircle, ChevronRight, UserPlus, User, RefreshCw, Wifi, WifiOff, AlertTriangle, RotateCcw, Trash2 } from 'lucide-react';
 import { adminAPI, employeeAPI, iotAPI } from '../../services/api';
 import toast from 'react-hot-toast';
 
@@ -27,6 +27,8 @@ export default function AdminOrders() {
   const [employees, setEmployees] = useState([]);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [assigningOrder, setAssigningOrder] = useState(null);
+  const [replacementRequest, setReplacementRequest] = useState(null);
+  const [replacementLoading, setReplacementLoading] = useState(false);
 
   useEffect(() => {
     loadOrders();
@@ -54,7 +56,9 @@ export default function AdminOrders() {
       setLoading(true);
       const res = await adminAPI.getAllOrders();
       console.log('Orders response:', res.data);
-      setOrders(res.data.data || []);
+      const allOrders = res.data.data || [];
+      const filteredOrders = allOrders.filter(order => !['RETURNING_TO_HUB', 'DAMAGED'].includes(order.status));
+      setOrders(filteredOrders);
       setError(null);
     } catch (err) {
       console.error('Failed to load orders:', err);
@@ -77,9 +81,40 @@ export default function AdminOrders() {
     );
   };
 
+  const handleClearAllOrders = async () => {
+    if (!confirm('⚠️ This will permanently delete ALL orders and related data. Continue?')) return;
+    try {
+      const response = await adminAPI.clearAllOrders();
+      const result = response.data?.data || {};
+      toast.success(`Orders cleared. Orders: ${result.ordersCleared ?? 0}, Tasks: ${result.tasksCleared ?? 0}`);
+      await loadOrders();
+    } catch (err) {
+      const errorMsg = err?.response?.data?.message || 'Failed to clear orders';
+      toast.error(errorMsg);
+    }
+  };
+
   const handleViewDetails = (order) => {
     setSelectedOrder(order);
     setShowDetailModal(true);
+    if (order?.status === 'AWAITING_REPLACEMENT') {
+      loadReplacementRequest(order.id);
+    } else {
+      setReplacementRequest(null);
+    }
+  };
+
+  const loadReplacementRequest = async (orderId) => {
+    try {
+      setReplacementLoading(true);
+      const res = await adminAPI.getReplacementByOrder(orderId);
+      setReplacementRequest(res.data.data || null);
+    } catch (error) {
+      console.error('Failed to load replacement request:', error);
+      setReplacementRequest(null);
+    } finally {
+      setReplacementLoading(false);
+    }
   };
 
   const handleStatusUpdate = async (orderId, newStatus) => {
@@ -215,6 +250,13 @@ export default function AdminOrders() {
           <p className="text-gray-600">View and manage all customer orders</p>
         </div>
         <div className="flex items-center gap-4">
+          <button
+            onClick={handleClearAllOrders}
+            className="px-4 py-2 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 flex items-center gap-2 transition"
+          >
+            <Trash2 className="w-4 h-4" />
+            Clear All Orders
+          </button>
           <button
             onClick={handleRefresh}
             disabled={loading}
@@ -442,6 +484,26 @@ export default function AdminOrders() {
                     <RotateCcw className="w-5 h-5" />
                     {updatingStatus ? 'Restarting...' : 'Restart Delivery'}
                   </button>
+                  <div className="mt-4 border-t border-purple-200 pt-4">
+                    <p className="text-sm text-purple-700 font-semibold mb-2">Replacement Request</p>
+                    {replacementLoading ? (
+                      <p className="text-sm text-purple-600">Loading replacement request...</p>
+                    ) : replacementRequest ? (
+                      <div className="bg-white rounded-lg p-4 space-y-2">
+                        <p className="text-sm text-gray-700">
+                          <span className="font-medium">Status:</span> {replacementRequest.status}
+                        </p>
+                        <p className="text-sm text-gray-700">
+                          <span className="font-medium">Item:</span> {replacementRequest.replacementItem?.productName}
+                        </p>
+                        {replacementRequest.status === 'PENDING_APPROVAL' && (
+                          <p className="text-xs text-purple-600">Approve this request from the Replacement Requests tab.</p>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-purple-600">No replacement request found.</p>
+                    )}
+                  </div>
                   <p className="text-xs text-purple-600 text-center mt-2">
                     This will notify the employee and customer that delivery is resuming.
                   </p>

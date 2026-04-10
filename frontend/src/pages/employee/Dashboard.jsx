@@ -34,6 +34,7 @@ export default function EmployeeDashboard() {
   const [selectedTask, setSelectedTask] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [imageType, setImageType] = useState('BEFORE');
+  const [criticalAlerts, setCriticalAlerts] = useState([]);
   const handleReturnedToHub = async (task) => {
     if (!task?.orderId) {
       toast.error('Order information missing for this task');
@@ -106,21 +107,13 @@ export default function EmployeeDashboard() {
         setTasks([]);
       }
 
-      // Load IoT events and notify employee
+      // Load critical IoT alerts for active tasks (handled via bell toasts)
       try {
-        if (stats?.employeeId || user?.id) {
-          const employeeId = stats?.employeeId || user?.id;
-          const eventsRes = await workerAPI.getIoTEventsByEmployee(employeeId);
-          const events = eventsRes.data || [];
-          events
-            .filter(event => event.eventType === 'FALL')
-            .forEach(event => {
-              if (!notifiedEventsRef.current.has(event.id)) {
-                notifiedEventsRef.current.add(event.id);
-                toast.error(`IoT FALL detected for order ${event.orderId || ''}`.trim());
-              }
-            });
-        }
+        const eventsRes = await iotAPI.getUnacknowledgedEvents();
+        const events = eventsRes.data || [];
+        const activeOrderIds = new Set(filtered.map(task => task.orderId).filter(Boolean));
+        const critical = events.filter(event => event.eventType === 'FALL' && activeOrderIds.has(event.orderId));
+        setCriticalAlerts(critical);
       } catch (error) {
         console.error('Failed to load IoT events:', error);
       }
@@ -388,6 +381,32 @@ export default function EmployeeDashboard() {
           />
         </div>
 
+        {/* Critical IoT Alerts */}
+        {criticalAlerts.length > 0 && (
+          <div className="bg-red-50 border-2 border-red-300 rounded-xl p-5 mb-6">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                <AlertCircle className="w-6 h-6 text-red-600" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-red-700">Critical IoT Alerts</h2>
+                <p className="text-sm text-red-600">Fall detected for active deliveries. Check IoT tab immediately.</p>
+              </div>
+            </div>
+            <div className="space-y-2">
+              {criticalAlerts.slice(0, 3).map(alert => (
+                <div key={alert.id} className="bg-white rounded-lg p-3 border border-red-200">
+                  <p className="text-sm font-semibold text-gray-900">Order {alert.orderId}</p>
+                  <p className="text-xs text-gray-600">Device: {alert.deviceId}</p>
+                </div>
+              ))}
+              {criticalAlerts.length > 3 && (
+                <p className="text-xs text-red-600">+{criticalAlerts.length - 3} more alerts</p>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Performance Metrics */}
         {stats?.performanceMetrics && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
@@ -520,6 +539,7 @@ function TaskCard({
 }) {
   const [showImageUpload, setShowImageUpload] = useState(false);
   const StatusIcon = TASK_STATUS_CONFIG[task.status]?.icon || Clock;
+  const isReplacement = task.title?.toLowerCase().includes('replacement');
   const isFallDetected = task?.isLocked || task?.lockReason?.toLowerCase()?.includes('fall');
   const isLocked = isLockedExternally && !isFallDetected;
 
@@ -542,6 +562,11 @@ function TaskCard({
             <span className={`px-3 py-1 rounded-full text-xs font-semibold ${PRIORITY_CONFIG[task.priority]?.color}`}>
               {task.priority}
             </span>
+            {isReplacement && (
+              <span className="px-3 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-700">
+                Replacement
+              </span>
+            )}
           </div>
           <p className="text-sm text-gray-600 mb-2">{task.taskNumber}</p>
           {task.description && (

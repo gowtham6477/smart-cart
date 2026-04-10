@@ -12,10 +12,12 @@ import java.util.Optional;
 public interface IoTEventRepository extends MongoRepository<IoTEvent, String> {
 
     List<IoTEvent> findByDeviceId(String deviceId);
+    long deleteByDeviceId(String deviceId);
 
     List<IoTEvent> findByEmployeeId(String employeeId);
     
     List<IoTEvent> findByOrderId(String orderId);
+    long deleteByOrderId(String orderId);
 
     List<IoTEvent> findByEventType(IoTEvent.EventType eventType);
 

@@ -44,6 +44,9 @@ public class TaskService {
     @Autowired
     private WalletService walletService;
 
+    @Autowired
+    private IoTService iotService;
+
     @Lazy
     @Autowired
     private OrderService orderService;
@@ -403,6 +406,8 @@ public class TaskService {
                 order.setStatus(Order.OrderStatus.REFUNDED);
                 orderRepository.save(order);
 
+                iotService.cleanupOrderIoT(order.getId());
+
                 // Credit the refund amount to customer's wallet
                 if (order.getCustomerId() != null && order.getTotalAmount() != null) {
                     walletService.creditRefund(
@@ -432,6 +437,12 @@ public class TaskService {
                 task.getOrderId(),
                 "Replacement requested from task " + task.getTaskNumber()
             );
+
+            orderRepository.findById(task.getOrderId()).ifPresent(order -> {
+                order.setStatus(Order.OrderStatus.AWAITING_REPLACEMENT);
+                order.setUpdatedAt(LocalDateTime.now());
+                orderRepository.save(order);
+            });
         }
 
         // Update task

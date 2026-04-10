@@ -191,8 +191,8 @@ export default function ReplacementRequests() {
                         <RotateCcw className="w-4 h-4" /> Refund
                       </button>
                     </div>
-                  ) : (
-                    <div className="flex flex-col gap-2">
+                  ) : request.status === 'APPROVED' || request.status === 'APPLIED' ? (
+                    <div className="flex gap-2">
                       <button
                         onClick={() => handleRefund(request)}
                         className="inline-flex items-center gap-1 px-3 py-1.5 bg-orange-600 text-white rounded-lg text-xs"
@@ -201,7 +201,22 @@ export default function ReplacementRequests() {
                       </button>
                       <button
                         onClick={() => handleOpenAssign(request)}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 border border-gray-300 rounded-lg text-xs"
+                        className="inline-flex items-center gap-1 px-3 py-1.5 border border-blue-600 text-blue-700 rounded-lg text-xs"
+                      >
+                        <UserPlus className="w-4 h-4" /> Reassign
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      <button
+                        disabled
+                        className="inline-flex items-center gap-1 px-3 py-1.5 bg-orange-300 text-white rounded-lg text-xs opacity-70 cursor-not-allowed"
+                      >
+                        <RotateCcw className="w-4 h-4" /> Refund
+                      </button>
+                      <button
+                        disabled
+                        className="inline-flex items-center gap-1 px-3 py-1.5 border border-gray-300 rounded-lg text-xs text-gray-400 cursor-not-allowed"
                       >
                         <UserPlus className="w-4 h-4" /> Reassign
                       </button>

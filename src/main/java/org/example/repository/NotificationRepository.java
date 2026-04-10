@@ -24,5 +24,7 @@ public interface NotificationRepository extends MongoRepository<Notification, St
         Notification.RecipientType recipientType,
         boolean isRead
     );
+
+    long deleteByRelatedEntityIdNotNull();
 }
 

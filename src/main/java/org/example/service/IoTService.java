@@ -659,6 +659,41 @@ public class IoTService {
     }
 
     /**
+     * Cleanup IoT data for an order (release device + remove events).
+     */
+    public void cleanupOrderIoT(String orderId) {
+        if (orderId == null || orderId.isBlank()) {
+            return;
+        }
+        String deviceId = null;
+        try {
+            Optional<Order> orderOpt = orderRepository.findById(orderId);
+            if (orderOpt.isPresent()) {
+                deviceId = orderOpt.get().getIotDeviceId();
+                try {
+                    releaseDeviceFromOrder(orderId);
+                } catch (Exception ignored) {
+                    // Ignore if device not assigned
+                }
+            }
+        } catch (Exception ignored) {
+            // Ignore lookup errors
+        }
+        try {
+            iotEventRepository.deleteByOrderId(orderId);
+        } catch (Exception ignored) {
+            // Ignore delete errors
+        }
+        if (deviceId != null && !deviceId.isBlank()) {
+            try {
+                iotEventRepository.deleteByDeviceId(deviceId);
+            } catch (Exception ignored) {
+                // Ignore delete errors
+            }
+        }
+    }
+
+    /**
      * Update device heartbeat and track online status
      */
     public void updateDeviceHeartbeatWithDevice(String deviceId, String ipAddress) {

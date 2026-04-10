@@ -20,6 +20,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -51,10 +52,29 @@ public class OrderService {
     @Autowired
     private NotificationService notificationService;
 
+    @Autowired
+    private IoTService iotService;
+
+    @Autowired
+    private org.example.repository.TaskRepository taskRepository;
+
+    @Autowired
+    private org.example.repository.ReplacementRequestRepository replacementRequestRepository;
+
+    @Autowired
+    private org.example.repository.NotificationRepository notificationRepository;
+
     @Transactional
     public OrderResponse createOrderFromCart(String customerId, OrderRequest request) {
         User customer = userRepository.findById(customerId)
                 .orElseThrow(() -> new RuntimeException("Customer not found"));
+
+        if (!isValidIndianMobile(customer.getMobile())) {
+            throw new RuntimeException("Please update a valid mobile number in your profile before ordering.");
+        }
+        if (isBlank(customer.getAddress()) || isBlank(customer.getCity()) || isBlank(customer.getPincode())) {
+            throw new RuntimeException("Please complete your delivery address (address, city, pincode) before ordering.");
+        }
 
         Cart cart = cartRepository.findByUserId(customerId)
                 .orElseThrow(() -> new RuntimeException("Cart not found"));
@@ -80,7 +100,7 @@ public class OrderService {
             cartItem.getCategory(),
             cartItem.getPrice(),
             cartItem.getQuantity(),
-            null,
+            cartItem.getImageUrl(),
             false,
             null,
             null
@@ -144,9 +164,19 @@ public class OrderService {
         order.setTotalAmount(amountAfterDiscount);
 
         // Set delivery address
-        order.setDeliveryAddress(request.getDeliveryAddress() != null ? request.getDeliveryAddress() : customer.getAddress());
-        order.setCity(request.getCity() != null ? request.getCity() : customer.getCity());
-        order.setPincode(request.getPincode() != null ? request.getPincode() : customer.getPincode());
+        String deliveryAddress = request.getDeliveryAddress() != null ? request.getDeliveryAddress() : customer.getAddress();
+        String city = request.getCity() != null ? request.getCity() : customer.getCity();
+        String state = request.getState() != null ? request.getState() : customer.getState();
+        String pincode = request.getPincode() != null ? request.getPincode() : customer.getPincode();
+
+        if (isBlank(deliveryAddress) || isBlank(city) || !isValidPincode(pincode)) {
+            throw new RuntimeException("Invalid delivery address. Please provide address, city and valid pincode.");
+        }
+
+        order.setDeliveryAddress(deliveryAddress);
+        order.setCity(city);
+        order.setState(state);
+        order.setPincode(pincode);
         order.setCustomerNote(request.getCustomerNote());
 
         order.setStatus(Order.OrderStatus.PENDING);
@@ -183,10 +213,49 @@ public class OrderService {
                 .collect(Collectors.toList());
     }
 
+    @Transactional
+    public Map<String, Long> clearAllOrders() {
+        Map<String, Long> result = new java.util.HashMap<>();
+
+        long orderCount = orderRepository.count();
+        long tasksCleared = taskRepository.count();
+        long replacementsCleared = replacementRequestRepository.count();
+        long notificationsCleared = notificationRepository.count();
+
+        orderRepository.deleteAll();
+        taskRepository.deleteAll();
+        replacementRequestRepository.deleteAll();
+        notificationRepository.deleteAll();
+
+        long eventsCleared = iotService.clearAllEvents();
+        long devicesReset = iotService.resetAllDevices();
+
+        result.put("ordersCleared", orderCount);
+        result.put("tasksCleared", tasksCleared);
+        result.put("replacementsCleared", replacementsCleared);
+        result.put("notificationsCleared", notificationsCleared);
+        result.put("iotEventsCleared", eventsCleared);
+        result.put("iotDevicesReset", devicesReset);
+
+        return result;
+    }
+
     public OrderResponse getOrderById(String orderId) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new RuntimeException("Order not found"));
         return mapToResponse(order);
+    }
+
+    private boolean isValidIndianMobile(String mobile) {
+        return mobile != null && mobile.matches("^[6-9]\\d{9}$");
+    }
+
+    private boolean isValidPincode(String pincode) {
+        return pincode != null && pincode.matches("^\\d{6}$");
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
     }
 
     public OrderResponse updateOrderStatus(String orderId, Order.OrderStatus status) {
@@ -222,6 +291,14 @@ public class OrderService {
         }
 
         order = orderRepository.save(order);
+
+        if (status == Order.OrderStatus.DELIVERED
+                || status == Order.OrderStatus.CANCELLED
+                || status == Order.OrderStatus.REFUNDED
+                || status == Order.OrderStatus.DAMAGED
+                || status == Order.OrderStatus.RETURNING_TO_HUB) {
+            iotService.cleanupOrderIoT(orderId);
+        }
         return mapToResponse(order);
     }
 
@@ -329,6 +406,8 @@ public class OrderService {
         order.setDeliveredAt(LocalDateTime.now());
         orderRepository.save(order);
 
+    iotService.cleanupOrderIoT(orderId);
+
         // Notify admin
         notificationService.notifyAdminOrderStatusChange(
             order.getId(),
@@ -344,6 +423,8 @@ public class OrderService {
         order.setStatus(Order.OrderStatus.DELIVERED);
         order.setDeliveredAt(LocalDateTime.now());
         orderRepository.save(order);
+
+        iotService.cleanupOrderIoT(orderId);
     }
 
     /**

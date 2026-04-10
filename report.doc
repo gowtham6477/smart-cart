@@ -1,0 +1,1424 @@
+package org.example.controller;
+
+import lombok.RequiredArgsConstructor;
+import org.example.dto.ApiResponse;
+import org.example.dto.IoTEventRequest;
+import org.example.entity.IoTDevice;
+import org.example.entity.IoTEvent;
+import org.example.entity.Order;
+import org.example.service.IoTService;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
+import jakarta.validation.Valid;
+import java.util.List;
+import java.util.Map;
+
+@RestController
+@RequestMapping("/api/iot")
+@RequiredArgsConstructor
+@CrossOrigin(origins = "*")
+public class IoTController {
+
+    private final IoTService iotService;
+
+    @PostMapping("/device/register")
+    public ResponseEntity<ApiResponse> registerDevice(@RequestBody Map<String, String> request) {
+        String deviceId = request.get("deviceId");
+        String name = request.get("name");
+        String macAddress = request.get("macAddress");
+        String firmwareVersion = request.get("firmwareVersion");
+        IoTDevice device = iotService.registerDevice(deviceId, name, macAddress, firmwareVersion);
+        return ResponseEntity.ok(new ApiResponse(true, "Device registered successfully", device));
+    }
+
+    @PostMapping("/events")
+    public ResponseEntity<ApiResponse> createEvent(@Valid @RequestBody IoTEventRequest request) {
+        IoTEvent event = iotService.createEvent(request);
+        return ResponseEntity.ok(new ApiResponse(true, "Event recorded successfully", event));
+    }
+
+    @PostMapping("/heartbeat/{deviceId}")
+    public ResponseEntity<ApiResponse> deviceHeartbeat(@PathVariable String deviceId,
+                                                       @RequestBody(required = false) Map<String, String> request) {
+        String ipAddress = request != null ? request.get("ipAddress") : null;
+        iotService.updateDeviceHeartbeatWithDevice(deviceId, ipAddress);
+        return ResponseEntity.ok(new ApiResponse(true, "Heartbeat received", null));
+    }
+
+    @GetMapping("/devices")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<List<IoTDevice>>> getAllDevices() {
+        List<IoTDevice> devices = iotService.getAllDevices();
+        return ResponseEntity.ok(new ApiResponse(true, "Devices retrieved", devices));
+    }
+
+    @GetMapping("/events")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<IoTEvent>> getAllEvents() {
+        List<IoTEvent> events = iotService.getAllEvents();
+        return ResponseEntity.ok(events);
+    }
+
+    @GetMapping("/events/unacknowledged")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
+    public ResponseEntity<List<IoTEvent>> getUnacknowledgedEvents() {
+        List<IoTEvent> events = iotService.getUnacknowledgedEvents();
+        return ResponseEntity.ok(events);
+    }
+
+    @GetMapping("/events/critical")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<IoTEvent>> getCriticalEvents() {
+        List<IoTEvent> events = iotService.getCriticalEvents();
+        return ResponseEntity.ok(events);
+    }
+
+    @PutMapping("/events/{eventId}/acknowledge")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
+    public ResponseEntity<ApiResponse> acknowledgeEvent(@PathVariable String eventId,
+                                                        @RequestHeader(value = "userId", required = false, defaultValue = "admin") String userId) {
+        IoTEvent event = iotService.acknowledgeEvent(eventId, userId);
+        return ResponseEntity.ok(new ApiResponse(true, "Event acknowledged", event));
+    }
+
+    @PostMapping("/devices/{deviceId}/assign/{orderId}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse> assignDeviceToOrder(@PathVariable String deviceId,
+                                                           @PathVariable String orderId) {
+        try {
+            Order order = iotService.assignDeviceToOrder(deviceId, orderId);
+            return ResponseEntity.ok(new ApiResponse(true, "Device " + deviceId + " assigned to order " + order.getOrderNumber(), order));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(new ApiResponse(false, e.getMessage(), null));
+        }
+    }
+
+    @PostMapping("/devices/release/{orderId}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse> releaseDevice(@PathVariable String orderId) {
+        try {
+            IoTDevice device = iotService.releaseDeviceFromOrder(orderId);
+            return ResponseEntity.ok(new ApiResponse(true, "Device " + device.getDeviceId() + " released", device));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(new ApiResponse(false, e.getMessage(), null));
+        }
+    }
+
+    @DeleteMapping("/devices/{deviceId}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse> deleteDevice(@PathVariable String deviceId) {
+        try {
+            iotService.deleteDevice(deviceId);
+            return ResponseEntity.ok(new ApiResponse(true, "Device deleted", null));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(new ApiResponse(false, e.getMessage(), null));
+        }
+    }
+
+    @GetMapping("/orders/second-attempt")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
+    public ResponseEntity<List<Order>> getSecondAttemptOrders() {
+        List<Order> orders = iotService.getSecondAttemptOrders();
+        return ResponseEntity.ok(orders);
+    }
+
+    @PostMapping("/full-reset")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse> fullReset() {
+        Map<String, Long> result = iotService.fullReset();
+        return ResponseEntity.ok(new ApiResponse(true, "Full IoT reset completed", result));
+    }
+}
+
+package org.example.service;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.example.dto.IoTEventRequest;
+import org.example.entity.IoTDevice;
+import org.example.entity.IoTEvent;
+import org.example.entity.Notification;
+import org.example.entity.Order;
+import org.example.repository.IoTDeviceRepository;
+import org.example.repository.IoTEventRepository;
+import org.example.repository.OrderRepository;
+import org.springframework.stereotype.Service;
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class IoTService {
+
+    private final IoTEventRepository iotEventRepository;
+    private final IoTDeviceRepository iotDeviceRepository;
+    private final OrderRepository orderRepository;
+    private final NotificationService notificationService;
+
+    public IoTEvent createEvent(IoTEventRequest request) {
+        log.info("IoT event received: deviceId={}, type={}, severity={}, orderId={}",
+            request.getDeviceId(), request.getEventType(), request.getSeverity(), request.getOrderId());
+        IoTEvent event = new IoTEvent();
+        event.setDeviceId(request.getDeviceId());
+        event.setEmployeeId(request.getEmployeeId());
+        event.setOrderId(request.getOrderId());
+        event.setBookingId(request.getBookingId());
+        event.setEventType(request.getEventType());
+        event.setMessage(request.getMessage());
+        event.setSensorData(request.getSensorData());
+        event.setLatitude(request.getLatitude());
+        event.setLongitude(request.getLongitude());
+        event.setSeverity(request.getSeverity());
+        event.setAcknowledged(false);
+        event.setTimestamp(LocalDateTime.now());
+
+        Optional<Order> orderOpt = findOrderByDevice(request.getDeviceId(), request.getOrderId());
+        if (orderOpt.isPresent()) {
+            Order order = orderOpt.get();
+            event.setOrderId(order.getId());
+            event.setEmployeeId(order.getEmployeeId());
+            if (order.getIotDeviceId() == null || order.getIotDeviceId().isEmpty()) {
+                order.setIotDeviceId(request.getDeviceId());
+                order.setIotDeviceActive(true);
+                order.setIotLastSeen(LocalDateTime.now());
+                orderRepository.save(order);
+            }
+            switch (request.getEventType()) {
+                case FALL:
+                    handleFallEvent(event, order);
+                    break;
+                case DEVICE_OFFLINE:
+                    handleDeviceOfflineEvent(event, order);
+                    break;
+                case IMPACT:
+                    handleImpactEvent(event, order);
+                    break;
+                case ABNORMAL_MOVEMENT:
+                    handleAbnormalMovementEvent(event, order);
+                    break;
+                default:
+                    break;
+            }
+        }
+        IoTEvent savedEvent = iotEventRepository.save(event);
+        log.info("IoT Event created: {} - {} - Severity: {} - Order: {}",
+            savedEvent.getDeviceId(), savedEvent.getEventType(),
+            savedEvent.getSeverity(), savedEvent.getOrderId());
+        return savedEvent;
+    }
+
+    private Optional<Order> findOrderByDevice(String deviceId, String orderId) {
+        if (orderId != null && !orderId.isEmpty()) {
+            return orderRepository.findById(orderId);
+        }
+        List<Order.OrderStatus> activeStatuses = Arrays.asList(
+            Order.OrderStatus.PENDING,
+            Order.OrderStatus.CONFIRMED,
+            Order.OrderStatus.PROCESSING,
+            Order.OrderStatus.ASSIGNED,
+            Order.OrderStatus.OUT_FOR_DELIVERY,
+            Order.OrderStatus.SHIPPED,
+            Order.OrderStatus.RETURNING_TO_HUB,
+            Order.OrderStatus.AWAITING_REPLACEMENT,
+            Order.OrderStatus.DELAY_IN_DELIVERY
+        );
+        List<Order> orders = orderRepository.findByIotDeviceIdAndStatusIn(deviceId, activeStatuses);
+        return orders.isEmpty() ? Optional.empty() : Optional.of(orders.get(0));
+    }
+
+    private void handleFallEvent(IoTEvent event, Order order) {
+        log.warn("FALL DETECTED for Order: {} by Device: {}", order.getOrderNumber(), event.getDeviceId());
+        order.setStatus(Order.OrderStatus.RETURNING_TO_HUB);
+        order.setIsSecondAttempt(true);
+        order.setAttemptCount(order.getAttemptCount() != null ? order.getAttemptCount() + 1 : 2);
+        order.setPreviousIncidentNote("FALL detected on " + LocalDateTime.now() +
+            ". Product may be damaged. Employee instructed to return to hub.");
+        orderRepository.save(order);
+        if (order.getEmployeeId() != null) {
+            notificationService.createNotification(
+                order.getEmployeeId(),
+                Notification.RecipientType.EMPLOYEE,
+                "FALL DETECTED - Return to Hub",
+                "Order " + order.getOrderNumber() + " - Product fall detected. Please return to the hub.",
+                Notification.NotificationType.IOT_RETURN_TO_HUB,
+                order.getId()
+            );
+        }
+        if (order.getCustomerId() != null) {
+            notificationService.createNotification(
+                order.getCustomerId(),
+                Notification.RecipientType.CUSTOMER,
+                "Delivery Update - Product Issue",
+                "We detected an issue with your order " + order.getOrderNumber() + ". We will replace or refund your order soon.",
+                Notification.NotificationType.IOT_PRODUCT_DAMAGED,
+                order.getId()
+            );
+        }
+        notificationService.createNotification(
+            "admin",
+            Notification.RecipientType.ADMIN,
+            "FALL EVENT - Order " + order.getOrderNumber(),
+            "Fall detected for Order " + order.getOrderNumber() + ". Employee: " + order.getEmployeeName() + ". Device: " + event.getDeviceId() + ".",
+            Notification.NotificationType.IOT_FALL_DETECTED,
+            order.getId()
+        );
+        event.setMessage("Fall detected. Employee notified to return to hub.");
+    }
+
+    private void handleDeviceOfflineEvent(IoTEvent event, Order order) {
+        log.warn("DEVICE OFFLINE for Order: {} Device: {}", order.getOrderNumber(), event.getDeviceId());
+        event.setOfflineStartTime(LocalDateTime.now());
+        order.setIotDeviceActive(false);
+        order.setDeviceOfflineSince(LocalDateTime.now());
+        orderRepository.save(order);
+        if (order.getEmployeeId() != null) {
+            notificationService.createNotification(
+                order.getEmployeeId(),
+                Notification.RecipientType.EMPLOYEE,
+                "IoT Device Offline - Turn On Now",
+                "The tracking device for Order " + order.getOrderNumber() + " is offline. Please turn it on.",
+                Notification.NotificationType.IOT_DEVICE_OFFLINE,
+                order.getId()
+            );
+        }
+        notificationService.createNotification(
+            "admin",
+            Notification.RecipientType.ADMIN,
+            "Device Offline - Order " + order.getOrderNumber(),
+            "IoT device " + event.getDeviceId() + " went offline.",
+            Notification.NotificationType.IOT_DEVICE_OFFLINE,
+            order.getId()
+        );
+        event.setMessage("Device went offline. Employee notified to turn on device.");
+    }
+
+    private void handleImpactEvent(IoTEvent event, Order order) {
+        log.warn("IMPACT DETECTED for Order: {} Device: {}", order.getOrderNumber(), event.getDeviceId());
+        if (order.getEmployeeId() != null) {
+            notificationService.createNotification(
+                order.getEmployeeId(),
+                Notification.RecipientType.EMPLOYEE,
+                "Impact Detected - Handle Carefully",
+                "Impact detected on Order " + order.getOrderNumber() + ". Please handle the package carefully.",
+                Notification.NotificationType.IOT_IMPACT_DETECTED,
+                order.getId()
+            );
+        }
+        notificationService.createNotification(
+            "admin",
+            Notification.RecipientType.ADMIN,
+            "Impact Event - Order " + order.getOrderNumber(),
+            "Impact detected for Order " + order.getOrderNumber() + ". Employee: " + order.getEmployeeName() + ".",
+            Notification.NotificationType.IOT_IMPACT_DETECTED,
+            order.getId()
+        );
+        event.setMessage("Impact detected. Employee warned to handle carefully.");
+    }
+
+    private void handleAbnormalMovementEvent(IoTEvent event, Order order) {
+        log.warn("ABNORMAL MOVEMENT for Order: {} Device: {}", order.getOrderNumber(), event.getDeviceId());
+        if (order.getEmployeeId() != null) {
+            notificationService.createNotification(
+                order.getEmployeeId(),
+                Notification.RecipientType.EMPLOYEE,
+                "Abnormal Movement Detected",
+                "Unusual movement detected for Order " + order.getOrderNumber() + ". Please be careful.",
+                Notification.NotificationType.IOT_ABNORMAL_MOVEMENT,
+                order.getId()
+            );
+        }
+        notificationService.createNotification(
+            "admin",
+            Notification.RecipientType.ADMIN,
+            "Abnormal Movement - Order " + order.getOrderNumber(),
+            "Abnormal movement detected for Order " + order.getOrderNumber() + ". Employee: " + order.getEmployeeName() + ".",
+            Notification.NotificationType.IOT_ABNORMAL_MOVEMENT,
+            order.getId()
+        );
+        event.setMessage("Abnormal movement detected. Employee warned to be careful.");
+    }
+
+    public void handleDeviceOnline(String deviceId) {
+        log.info("DEVICE ONLINE: {}", deviceId);
+        List<IoTEvent> offlineEvents = iotEventRepository
+            .findByEventTypeAndOfflineEndTimeIsNull(IoTEvent.EventType.DEVICE_OFFLINE);
+        for (IoTEvent event : offlineEvents) {
+            if (event.getDeviceId().equals(deviceId)) {
+                event.setOfflineEndTime(LocalDateTime.now());
+                if (event.getOfflineStartTime() != null) {
+                    long minutes = Duration.between(event.getOfflineStartTime(), LocalDateTime.now()).toMinutes();
+                    event.setOfflineDurationMinutes(minutes);
+                }
+                iotEventRepository.save(event);
+                Optional<Order> orderOpt = orderRepository.findByIotDeviceId(deviceId);
+                if (orderOpt.isPresent()) {
+                    Order order = orderOpt.get();
+                    order.setIotDeviceActive(true);
+                    order.setIotLastSeen(LocalDateTime.now());
+                    if (order.getDeviceOfflineSince() != null) {
+                        long offlineMinutes = Duration.between(order.getDeviceOfflineSince(), LocalDateTime.now()).toMinutes();
+                        order.setTotalOfflineMinutes(
+                            (order.getTotalOfflineMinutes() != null ? order.getTotalOfflineMinutes() : 0) + offlineMinutes
+                        );
+                        order.setDeviceOfflineSince(null);
+                    }
+                    orderRepository.save(order);
+                }
+            }
+        }
+    }
+
+    public void updateDeviceHeartbeatWithDevice(String deviceId, String ipAddress) {
+        Optional<IoTDevice> deviceOpt = iotDeviceRepository.findByDeviceId(deviceId);
+        if (deviceOpt.isPresent()) {
+            IoTDevice device = deviceOpt.get();
+            device.setIsOnline(true);
+            device.setLastHeartbeat(LocalDateTime.now());
+            device.setIpAddress(ipAddress);
+            if (device.getStatus() == IoTDevice.DeviceStatus.OFFLINE) {
+                device.setStatus(device.getAssignedOrderId() != null ?
+                    IoTDevice.DeviceStatus.IN_USE : IoTDevice.DeviceStatus.AVAILABLE);
+            }
+            iotDeviceRepository.save(device);
+        }
+        Optional<Order> orderOpt = orderRepository.findByIotDeviceId(deviceId);
+        if (orderOpt.isPresent()) {
+            Order order = orderOpt.get();
+            order.setIotDeviceActive(true);
+            order.setIotLastSeen(LocalDateTime.now());
+            orderRepository.save(order);
+        }
+        handleDeviceOnline(deviceId);
+    }
+
+    public IoTDevice registerDevice(String deviceId, String name, String macAddress, String firmwareVersion) {
+        Optional<IoTDevice> existingDevice = iotDeviceRepository.findByDeviceId(deviceId);
+        IoTDevice device;
+        if (existingDevice.isPresent()) {
+            device = existingDevice.get();
+            device.setFirmwareVersion(firmwareVersion);
+            device.setIsOnline(true);
+            device.setLastHeartbeat(LocalDateTime.now());
+        } else {
+            device = new IoTDevice();
+            device.setDeviceId(deviceId);
+            device.setName(name != null ? name : "Device " + deviceId);
+            device.setMacAddress(macAddress);
+            device.setFirmwareVersion(firmwareVersion);
+            device.setStatus(IoTDevice.DeviceStatus.AVAILABLE);
+            device.setIsOnline(true);
+            device.setLastHeartbeat(LocalDateTime.now());
+        }
+        return iotDeviceRepository.save(device);
+    }
+
+    public List<IoTDevice> getAllDevices() {
+        return iotDeviceRepository.findAll();
+    }
+
+    public Order assignDeviceToOrder(String deviceId, String orderId) {
+        IoTDevice device = iotDeviceRepository.findByDeviceId(deviceId)
+            .orElseThrow(() -> new RuntimeException("Device not found: " + deviceId));
+        if (!device.canBeAssigned()) {
+            throw new RuntimeException("Device " + deviceId + " is not available. Current status: " +
+                device.getStatus() + ", Assigned to order: " + device.getAssignedOrderNumber());
+        }
+        Order order = orderRepository.findById(orderId)
+            .orElseThrow(() -> new RuntimeException("Order not found: " + orderId));
+        if (order.getIotDeviceId() != null && !order.getIotDeviceId().isEmpty()) {
+            throw new RuntimeException("Order " + order.getOrderNumber() +
+                " already has device " + order.getIotDeviceId() + " assigned");
+        }
+        device.assignToOrder(orderId, order.getOrderNumber());
+        device.setStatus(IoTDevice.DeviceStatus.ASSIGNED);
+        iotDeviceRepository.save(device);
+        order.setIotDeviceId(deviceId);
+        order.setIotDeviceActive(true);
+        order.setIotLastSeen(LocalDateTime.now());
+        notificationService.createNotification(
+            "admin",
+            Notification.RecipientType.ADMIN,
+            "Device Assigned - " + order.getOrderNumber(),
+            "IoT Device " + deviceId + " has been assigned to Order " + order.getOrderNumber(),
+            Notification.NotificationType.IOT_DEVICE_OFFLINE,
+            order.getId()
+        );
+        return orderRepository.save(order);
+    }
+
+    public IoTDevice releaseDeviceFromOrder(String orderId) {
+        Order order = orderRepository.findById(orderId)
+            .orElseThrow(() -> new RuntimeException("Order not found: " + orderId));
+        if (order.getIotDeviceId() == null) {
+            throw new RuntimeException("Order " + order.getOrderNumber() + " has no device assigned");
+        }
+        IoTDevice device = iotDeviceRepository.findByDeviceId(order.getIotDeviceId())
+            .orElseThrow(() -> new RuntimeException("Device not found: " + order.getIotDeviceId()));
+        device.release();
+        iotDeviceRepository.save(device);
+        order.setIotDeviceId(null);
+        order.setIotDeviceActive(false);
+        orderRepository.save(order);
+        return device;
+    }
+
+    public void deleteDevice(String deviceId) {
+        IoTDevice device = iotDeviceRepository.findByDeviceId(deviceId)
+            .orElseThrow(() -> new RuntimeException("Device not found: " + deviceId));
+        if (device.getAssignedOrderId() != null) {
+            throw new RuntimeException("Cannot delete device " + deviceId +
+                " - it is currently assigned to order " + device.getAssignedOrderNumber());
+        }
+        iotDeviceRepository.delete(device);
+    }
+
+    public List<IoTEvent> getUnacknowledgedEvents() {
+        return iotEventRepository.findByAcknowledgedFalse();
+    }
+
+    public List<IoTEvent> getAllEvents() {
+        return iotEventRepository.findAll();
+    }
+
+    public IoTEvent acknowledgeEvent(String eventId, String userId) {
+        IoTEvent event = iotEventRepository.findById(eventId)
+            .orElseThrow(() -> new RuntimeException("Event not found"));
+        event.setAcknowledged(true);
+        event.setAcknowledgedBy(userId);
+        event.setAcknowledgedAt(LocalDateTime.now());
+        return iotEventRepository.save(event);
+    }
+
+    public List<IoTEvent> getCriticalEvents() {
+        return iotEventRepository.findBySeverity(IoTEvent.EventSeverity.CRITICAL);
+    }
+
+    public List<Order> getSecondAttemptOrders() {
+        return orderRepository.findByIsSecondAttemptTrue();
+    }
+
+    public long clearAllEvents() {
+        long count = iotEventRepository.count();
+        iotEventRepository.deleteAll();
+        return count;
+    }
+
+    public long resetAllDevices() {
+        List<IoTDevice> devices = iotDeviceRepository.findAll();
+        for (IoTDevice device : devices) {
+            device.release();
+            device.setIsOnline(false);
+            device.setLastHeartbeat(null);
+            device.setLastEventTime(null);
+            device.setTotalEventsCount(0);
+            device.setFallEventsCount(0);
+            device.setImpactEventsCount(0);
+            iotDeviceRepository.save(device);
+        }
+        return devices.size();
+    }
+
+    public long clearIoTFromOrders() {
+        List<Order> ordersWithIoT = orderRepository.findAll().stream()
+            .filter(o -> o.getIotDeviceId() != null)
+            .toList();
+        for (Order order : ordersWithIoT) {
+            order.setIotDeviceId(null);
+            order.setIotDeviceActive(null);
+            order.setIotLastSeen(null);
+            order.setIsSecondAttempt(false);
+            order.setAttemptCount(1);
+            order.setPreviousIncidentNote(null);
+            order.setDeviceOfflineSince(null);
+            order.setTotalOfflineMinutes(null);
+            orderRepository.save(order);
+        }
+        return ordersWithIoT.size();
+    }
+
+    public Map<String, Long> fullReset() {
+        Map<String, Long> result = new HashMap<>();
+        result.put("eventsCleared", clearAllEvents());
+        result.put("devicesReset", resetAllDevices());
+        result.put("ordersCleared", clearIoTFromOrders());
+        return result;
+    }
+}
+
+package org.example.entity;
+
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.mapping.Document;
+import java.time.LocalDateTime;
+import java.util.Map;
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Document(collection = "iot_events")
+public class IoTEvent {
+
+        @Id
+        private String id;
+
+        private String deviceId;
+        private String employeeId;
+        private String orderId;
+        private String bookingId;
+
+        private EventType eventType;
+        private EventSeverity severity;
+        private String message;
+        private Map<String, Object> sensorData;
+        private Double latitude;
+        private Double longitude;
+
+        private LocalDateTime timestamp;
+        private Boolean acknowledged = false;
+        private String acknowledgedBy;
+        private LocalDateTime acknowledgedAt;
+
+        private LocalDateTime offlineStartTime;
+        private LocalDateTime offlineEndTime;
+        private Long offlineDurationMinutes;
+
+        public enum EventType {
+                FALL,
+                IMPACT,
+                ABNORMAL_MOVEMENT,
+                DEVICE_OFFLINE,
+                DEVICE_ONLINE,
+                LOW_BATTERY,
+                OTHER
+        }
+
+        public enum EventSeverity {
+                LOW,
+                MEDIUM,
+                HIGH,
+                CRITICAL
+        }
+}
+
+package org.example.entity;
+
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.mapping.Document;
+import java.time.LocalDateTime;
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Document(collection = "iot_devices")
+public class IoTDevice {
+
+        @Id
+        private String id;
+
+        private String deviceId;
+        private String name;
+        private String macAddress;
+        private String firmwareVersion;
+        private DeviceStatus status;
+
+        private String assignedOrderId;
+        private String assignedOrderNumber;
+        private LocalDateTime assignedAt;
+
+        private Boolean isOnline;
+        private LocalDateTime lastHeartbeat;
+        private LocalDateTime lastEventTime;
+        private String ipAddress;
+
+        private Integer totalEventsCount = 0;
+        private Integer fallEventsCount = 0;
+        private Integer impactEventsCount = 0;
+
+        public enum DeviceStatus {
+                AVAILABLE,
+                ASSIGNED,
+                IN_USE,
+                OFFLINE,
+                MAINTENANCE
+        }
+
+        public void assignToOrder(String orderId, String orderNumber) {
+                this.assignedOrderId = orderId;
+                this.assignedOrderNumber = orderNumber;
+                this.assignedAt = LocalDateTime.now();
+                this.status = DeviceStatus.ASSIGNED;
+        }
+
+        public void release() {
+                this.assignedOrderId = null;
+                this.assignedOrderNumber = null;
+                this.assignedAt = null;
+                this.status = DeviceStatus.AVAILABLE;
+        }
+
+        public boolean canBeAssigned() {
+                return status == DeviceStatus.AVAILABLE || status == DeviceStatus.MAINTENANCE;
+        }
+}
+
+import apiClient from "../lib/apiClient";
+
+export const iotAPI = {
+    getDevices: () => apiClient.get("/api/iot/devices"),
+    getEvents: () => apiClient.get("/api/iot/events"),
+    getCriticalEvents: () => apiClient.get("/api/iot/events/critical"),
+    getUnacknowledgedEvents: () => apiClient.get("/api/iot/events/unacknowledged"),
+    acknowledgeEvent: (eventId) => apiClient.post(`/api/iot/events/${eventId}/acknowledge`),
+    assignDeviceToOrder: (deviceId, orderId) =>
+        apiClient.post(`/api/iot/devices/${deviceId}/assign/${orderId}`),
+    releaseDeviceFromOrder: (orderId) => apiClient.post(`/api/iot/devices/release/${orderId}`),
+    registerDevice: (data) => apiClient.post("/api/iot/devices/register", data),
+    deleteDevice: (deviceId) => apiClient.delete(`/api/iot/devices/${deviceId}`),
+    clearAllEvents: () => apiClient.delete("/api/iot/events/clear-all"),
+    resetAllDevices: () => apiClient.post("/api/iot/devices/reset-all"),
+    clearIoTFromOrders: () => apiClient.post("/api/iot/orders/clear-iot"),
+    fullReset: () => apiClient.post("/api/iot/full-reset"),
+};
+
+import { useEffect, useState } from "react";
+import { iotAPI } from "../../services/iotAPI";
+
+const IoTEvents = () => {
+    const [events, setEvents] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+
+    const fetchEvents = async () => {
+        try {
+            setLoading(true);
+            const res = await iotAPI.getEvents();
+            setEvents(res.data || []);
+            setError(null);
+        } catch (err) {
+            setError(err.response?.data?.message || "Failed to fetch IoT events");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchEvents();
+    }, []);
+
+    const handleAcknowledge = async (eventId) => {
+        try {
+            await iotAPI.acknowledgeEvent(eventId);
+            fetchEvents();
+        } catch (err) {
+            setError(err.response?.data?.message || "Failed to acknowledge event");
+        }
+    };
+
+    const renderSeverity = (severity) => {
+        const colors = {
+            LOW: "bg-green-100 text-green-800",
+            MEDIUM: "bg-yellow-100 text-yellow-800",
+            HIGH: "bg-orange-100 text-orange-800",
+            CRITICAL: "bg-red-100 text-red-800",
+        };
+        return (
+            <span className={`px-2 py-1 rounded text-xs font-medium ${colors[severity] || "bg-gray-100"}`}>
+                {severity}
+            </span>
+        );
+    };
+
+    if (loading) return <div className="p-6">Loading IoT Events...</div>;
+
+    return (
+        <div className="p-6">
+            <div className="flex items-center justify-between mb-6">
+                <h1 className="text-2xl font-bold">IoT Events</h1>
+                <button
+                    onClick={fetchEvents}
+                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                >
+                    Refresh
+                </button>
+            </div>
+
+            {error && (
+                <div className="mb-4 p-3 bg-red-100 text-red-700 rounded">
+                    {error}
+                </div>
+            )}
+
+            <div className="overflow-x-auto">
+                <table className="min-w-full bg-white border rounded">
+                    <thead>
+                        <tr className="bg-gray-100 text-left">
+                            <th className="p-3">Timestamp</th>
+                            <th className="p-3">Device</th>
+                            <th className="p-3">Order</th>
+                            <th className="p-3">Type</th>
+                            <th className="p-3">Severity</th>
+                            <th className="p-3">Message</th>
+                            <th className="p-3">Status</th>
+                            <th className="p-3">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {events.map((event) => (
+                            <tr key={event.id} className="border-t">
+                                <td className="p-3 text-sm">
+                                    {new Date(event.timestamp).toLocaleString()}
+                                </td>
+                                <td className="p-3 text-sm">{event.deviceId}</td>
+                                <td className="p-3 text-sm">{event.orderId || "-"}</td>
+                                <td className="p-3 text-sm">{event.eventType}</td>
+                                <td className="p-3 text-sm">{renderSeverity(event.severity)}</td>
+                                <td className="p-3 text-sm">{event.message}</td>
+                                <td className="p-3 text-sm">
+                                    {event.acknowledged ? (
+                                        <span className="text-green-600">Acknowledged</span>
+                                    ) : (
+                                        <span className="text-red-600">Pending</span>
+                                    )}
+                                </td>
+                                <td className="p-3 text-sm">
+                                    {!event.acknowledged && (
+                                        <button
+                                            onClick={() => handleAcknowledge(event.id)}
+                                            className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700"
+                                        >
+                                            Acknowledge
+                                        </button>
+                                    )}
+                                </td>
+                            </tr>
+                        ))}
+                        {events.length === 0 && (
+                            <tr>
+                                <td className="p-3 text-sm text-center" colSpan={8}>
+                                    No IoT events found.
+                                </td>
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+};
+
+export default IoTEvents;
+
+#include <Arduino.h>
+#include <Wire.h>
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include <ArduinoJson.h>
+#include <MPU6050.h>
+
+// ============================================
+// CONFIGURATION - CHANGE THESE!
+// ============================================
+
+// WiFi Credentials
+const char* WIFI_SSID = "realme P1 Pro 5G";        // <-- Change this
+const char* WIFI_PASSWORD = "helloworld"; // <-- Change this
+
+// Backend Server URL (your Spring Boot server)
+const char* SERVER_URL = "http://10.106.237.138:8080";  // <-- Change to your server IP
+
+// Device ID (unique for each ESP32)
+const char* DEVICE_ID = "ESP32-001";  // <-- Change for each device
+
+// ============================================
+// PIN CONFIGURATION
+// ============================================
+#define SDA_PIN 21
+#define SCL_PIN 22
+#define LED_PIN 2
+
+// ============================================
+// CATEGORY PROFILES + THRESHOLDS
+// ============================================
+enum PackageCategory {
+    CATEGORY_FRAGILE,   // Glassware, Ceramics, Instruments, Jewelry
+    CATEGORY_HAZARDOUS, // Batteries, Flammables, Pharma, Electronics
+    CATEGORY_HEAVY      // Industrial equipment, sculptures, antiques
+};
+
+struct MotionProfile {
+    const char* name;
+    float ffThresholdG;      // Free-fall threshold (g)
+    uint16_t ffDurationMs;   // Free-fall duration (ms)
+    float motThresholdG;     // Impact/motion threshold (g)
+    uint16_t motDurationMs;  // Impact/motion duration (ms)
+    float tiltThresholdDeg;  // Tilt threshold (deg)
+    float tumbleGyroDps;     // Tumble angular velocity (deg/s)
+    bool useZeroMotion;
+    bool useHpf;
+};
+
+// Base profiles (single-category)
+const MotionProfile PROFILE_FRAGILE = {
+    "Fragile/Precision",
+    0.35f, // 350mg
+    20,
+    0.08f, // 80mg (micro-impact)
+    20,
+    25.0f,
+    90.0f,
+    false,
+    true
+};
+
+const MotionProfile PROFILE_HAZARDOUS = {
+    "Structural/Hazardous",
+    0.45f, // 450mg
+    50,
+    1.5f,  // 1g-2g
+    40,
+    20.0f,
+    140.0f,
+    true,
+    true
+};
+
+const MotionProfile PROFILE_HEAVY = {
+    "Heavy/Industrial",
+    0.60f, // 600mg
+    100,
+    0.50f, // 500mg
+    60,
+    30.0f,
+    160.0f,
+    false,
+    true
+};
+
+// Mixed package configuration (lowest common denominator rule)
+const bool MIX_HAS_FRAGILE = true;
+const bool MIX_HAS_HAZARDOUS = false;
+const bool MIX_HAS_HEAVY = false;
+
+// Pro tip: increase duration slightly to avoid road-noise false positives
+const uint16_t DURATION_PADDING_MS = 20;
+
+// Cooldown to prevent multiple events
+const unsigned long EVENT_COOLDOWN = 5000;  // 5 seconds between same event type
+
+// ============================================
+// GLOBAL VARIABLES
+// ============================================
+MPU6050 mpu;
+HTTPClient http;
+
+// Sensor data
+float ax, ay, az;
+float gx, gy, gz;
+float magnitude;
+float linearMagnitude;
+float tiltAngleDeg;
+float gyroMagnitude;
+float previousMagnitude = 1.0;
+float variance;
+
+// Gravity compensation (linear acceleration)
+float gravityX = 0.0f;
+float gravityY = 0.0f;
+float gravityZ = 1.0f;
+const float GRAVITY_ALPHA = 0.98f;
+
+// Active profile
+MotionProfile activeProfile = PROFILE_FRAGILE;
+
+// Detection timers
+unsigned long ffStart = 0;
+unsigned long motStart = 0;
+unsigned long tiltStart = 0;
+unsigned long zeroMotionStart = 0;
+bool impactLatched = false;
+
+// Pre-impact buffer (FIFO ~100ms)
+const int PRE_IMPACT_SAMPLES = 10;
+float preImpactMag[PRE_IMPACT_SAMPLES];
+float preImpactTilt[PRE_IMPACT_SAMPLES];
+float preImpactLinear[PRE_IMPACT_SAMPLES];
+int preImpactIndex = 0;
+
+// Timing
+unsigned long lastHeartbeat = 0;
+unsigned long lastFallEvent = 0;
+unsigned long lastImpactEvent = 0;
+unsigned long lastPrintTime = 0;
+
+const unsigned long HEARTBEAT_INTERVAL = 30000;  // Send heartbeat every 30 seconds
+
+// Connection status
+bool wifiConnected = false;
+bool serverRegistered = false;
+
+// ============================================
+// FUNCTION DECLARATIONS
+// ============================================
+void connectWiFi();
+void registerDevice();
+void sendHeartbeat();
+void sendEvent(const char* eventType, const char* severity, const char* message);
+void blinkLED(int times, int delayMs);
+void pingServer();
+MotionProfile selectCriticalProfile();
+MotionProfile buildMixedProfile();
+float clampFloat(float value, float minValue, float maxValue);
+
+// ============================================
+// SETUP
+// ============================================
+void setup() {
+    Serial.begin(115200);
+    delay(1000);
+  
+    pinMode(LED_PIN, OUTPUT);
+  
+    Serial.println("\n==========================================");
+    Serial.println("  Smart Cart IoT - Fall Detection System");
+    Serial.println("==========================================");
+    Serial.printf("  Device ID: %s\n", DEVICE_ID);
+    Serial.println("==========================================\n");
+  
+    // Initialize I2C
+    Wire.begin(SDA_PIN, SCL_PIN);
+  
+    // Initialize MPU6050
+    Serial.println("Initializing MPU6050...");
+    Wire.beginTransmission(0x68);
+    Wire.write(0x6B);
+    Wire.write(0x00);
+    Wire.endTransmission(true);
+    delay(100);
+  
+    mpu.initialize();
+    delay(100);
+  
+    if (mpu.testConnection()) {
+        Serial.println("✓ MPU6050 connected successfully");
+        mpu.setFullScaleAccelRange(MPU6050_ACCEL_FS_16); // High-G clipping management
+        mpu.setFullScaleGyroRange(MPU6050_GYRO_FS_2000);
+    } else {
+        Serial.println("✓ MPU6050 found, configuring...");
+        mpu.setFullScaleAccelRange(MPU6050_ACCEL_FS_16);
+        mpu.setFullScaleGyroRange(MPU6050_GYRO_FS_2000);
+    }
+
+    activeProfile = buildMixedProfile();
+    Serial.printf("Active Profile: %s | FF %.2fg/%ums | MOT %.2fg/%ums\n",
+                                activeProfile.name,
+                                activeProfile.ffThresholdG,
+                                activeProfile.ffDurationMs,
+                                activeProfile.motThresholdG,
+                                activeProfile.motDurationMs);
+  
+    // Connect to WiFi
+    connectWiFi();
+  
+    // Register device with backend
+    if (wifiConnected) {
+        registerDevice();
+        pingServer();
+    }
+  
+    Serial.println("\n✓ System Ready!");
+    Serial.println("Monitoring for falls and impacts...\n");
+    blinkLED(3, 200);
+}
+
+// ============================================
+// MAIN LOOP
+// ============================================
+void loop() {
+    unsigned long currentTime = millis();
+  
+    // Check WiFi connection
+    if (WiFi.status() != WL_CONNECTED) {
+        wifiConnected = false;
+        connectWiFi();
+        if (wifiConnected && !serverRegistered) {
+            registerDevice();
+        }
+    }
+  
+    // Read sensor data
+    int16_t ax_raw, ay_raw, az_raw;
+    int16_t gx_raw, gy_raw, gz_raw;
+  
+    mpu.getAcceleration(&ax_raw, &ay_raw, &az_raw);
+    mpu.getRotation(&gx_raw, &gy_raw, &gz_raw);
+  
+    ax = ax_raw / 8192.0;
+    ay = ay_raw / 8192.0;
+    az = az_raw / 8192.0;
+  
+    gx = gx_raw / 65.5;
+    gy = gy_raw / 65.5;
+    gz = gz_raw / 65.5;
+  
+    magnitude = sqrt(ax * ax + ay * ay + az * az);
+    variance = abs(magnitude - previousMagnitude);
+    previousMagnitude = magnitude;
+
+    // Gravity compensation (linear acceleration)
+    gravityX = GRAVITY_ALPHA * gravityX + (1.0f - GRAVITY_ALPHA) * ax;
+    gravityY = GRAVITY_ALPHA * gravityY + (1.0f - GRAVITY_ALPHA) * ay;
+    gravityZ = GRAVITY_ALPHA * gravityZ + (1.0f - GRAVITY_ALPHA) * az;
+
+    float linX = ax - gravityX;
+    float linY = ay - gravityY;
+    float linZ = az - gravityZ;
+    linearMagnitude = sqrt(linX * linX + linY * linY + linZ * linZ);
+
+    // Tilt angle from gravity vector
+    float gMag = sqrt(gravityX * gravityX + gravityY * gravityY + gravityZ * gravityZ);
+    float normalizedZ = gMag > 0.0f ? gravityZ / gMag : 1.0f;
+    normalizedZ = clampFloat(normalizedZ, -1.0f, 1.0f);
+    tiltAngleDeg = acos(normalizedZ) * 180.0f / PI;
+
+    gyroMagnitude = sqrt(gx * gx + gy * gy + gz * gz);
+
+    // FIFO buffer (pre-impact signature)
+    preImpactMag[preImpactIndex] = magnitude;
+    preImpactTilt[preImpactIndex] = tiltAngleDeg;
+    preImpactLinear[preImpactIndex] = linearMagnitude;
+    preImpactIndex = (preImpactIndex + 1) % PRE_IMPACT_SAMPLES;
+
+    // ===== FREE-FALL DETECTION =====
+    if (magnitude < activeProfile.ffThresholdG) {
+        if (ffStart == 0) ffStart = currentTime;
+        if (currentTime - ffStart >= activeProfile.ffDurationMs && currentTime - lastFallEvent > EVENT_COOLDOWN) {
+            Serial.println("\n🚨 ========== FREE-FALL DETECTED! ==========");
+            Serial.printf("    Magnitude: %.2f g\n", magnitude);
+            Serial.println("    =====================================\n");
+      
+            sendEvent("FALL", "HIGH", "Free-fall detected - inspection required");
+            lastFallEvent = currentTime;
+            ffStart = 0;
+            blinkLED(5, 100);
+        }
+    } else {
+        ffStart = 0;
+    }
+
+    // ===== IMPACT / MICRO-IMPACT DETECTION =====
+    if (linearMagnitude > activeProfile.motThresholdG) {
+        if (motStart == 0) motStart = currentTime;
+        if (currentTime - motStart >= activeProfile.motDurationMs && currentTime - lastImpactEvent > EVENT_COOLDOWN) {
+            const bool isFragile = activeProfile.motThresholdG <= PROFILE_FRAGILE.motThresholdG;
+            const char* eventType = isFragile ? "ABNORMAL_MOVEMENT" : "IMPACT";
+            const char* severity = isFragile ? "HIGH" : "CRITICAL";
+            const char* message = isFragile
+                ? "Micro-impact detected - inspection required"
+                : "Impact detected - package may be damaged";
+
+            impactLatched = activeProfile.useZeroMotion;
+
+            Serial.println("\n🔴 ======= IMPACT DETECTED! ==========");
+            Serial.printf("    Linear Mag: %.2f g\n", linearMagnitude);
+            Serial.println("    =====================================\n");
+      
+            sendEvent(eventType, severity, message);
+            lastImpactEvent = currentTime;
+            motStart = 0;
+            blinkLED(10, 50);
+        }
+    } else {
+        motStart = 0;
+    }
+
+    // ===== ZERO-MOTION CONFIRMATION (Hazardous) =====
+    if (activeProfile.useZeroMotion && impactLatched) {
+        if (linearMagnitude < 0.05f) {
+            if (zeroMotionStart == 0) zeroMotionStart = currentTime;
+            if (currentTime - zeroMotionStart > 200) {
+                sendEvent("IMPACT", "CRITICAL", "Impact detected and motion stopped - possible crash/spill");
+                impactLatched = false;
+                zeroMotionStart = 0;
+            }
+        } else {
+            zeroMotionStart = 0;
+        }
+    }
+
+    // ===== TILT DETECTION (Heavy/Fragile) =====
+    if (tiltAngleDeg > activeProfile.tiltThresholdDeg) {
+        if (tiltStart == 0) tiltStart = currentTime;
+        if (currentTime - tiltStart > 200 && currentTime - lastImpactEvent > EVENT_COOLDOWN) {
+            sendEvent("ABNORMAL_MOVEMENT", "HIGH", "Tilt detected - possible toppling risk");
+            lastImpactEvent = currentTime;
+            tiltStart = 0;
+        }
+    } else {
+        tiltStart = 0;
+    }
+
+    // ===== TUMBLE DETECTION =====
+    if (gyroMagnitude > activeProfile.tumbleGyroDps && linearMagnitude > activeProfile.motThresholdG) {
+        if (currentTime - lastImpactEvent > EVENT_COOLDOWN) {
+            sendEvent("ABNORMAL_MOVEMENT", "HIGH", "Tumble detected - unstable handling");
+            lastImpactEvent = currentTime;
+            blinkLED(6, 80);
+        }
+    }
+  
+    // Send heartbeat periodically
+    if (currentTime - lastHeartbeat > HEARTBEAT_INTERVAL) {
+        sendHeartbeat();
+        lastHeartbeat = currentTime;
+    }
+  
+    // Print sensor data every second
+    if (currentTime - lastPrintTime > 1000) {
+        Serial.printf("Mag: %.2fg | Lin: %.2fg | Tilt: %.1f° | WiFi: %s\n",
+                                    magnitude, linearMagnitude, tiltAngleDeg,
+                                    wifiConnected ? "Connected" : "Disconnected");
+        lastPrintTime = currentTime;
+    }
+  
+    delay(10);
+}
+
+// ============================================
+// WiFi CONNECTION
+// ============================================
+void connectWiFi() {
+    Serial.printf("Connecting to WiFi: %s", WIFI_SSID);
+  
+    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  
+    int attempts = 0;
+    while (WiFi.status() != WL_CONNECTED && attempts < 20) {
+        delay(500);
+        Serial.print(".");
+        attempts++;
+    }
+  
+    if (WiFi.status() == WL_CONNECTED) {
+        wifiConnected = true;
+        Serial.println("\n✓ WiFi Connected!");
+        Serial.printf("  IP Address: %s\n", WiFi.localIP().toString().c_str());
+    } else {
+        wifiConnected = false;
+        Serial.println("\n✗ WiFi Connection Failed!");
+    }
+}
+
+// ============================================
+// REGISTER DEVICE WITH BACKEND
+// ============================================
+void registerDevice() {
+    if (!wifiConnected) return;
+  
+    String url = String(SERVER_URL) + "/api/iot/device/register";
+  
+    Serial.printf("Registering device with server: %s\n", url.c_str());
+  
+    // Create JSON payload
+    StaticJsonDocument<256> doc;
+    doc["deviceId"] = DEVICE_ID;
+    doc["name"] = String("Smart Cart Device ") + DEVICE_ID;
+    doc["macAddress"] = WiFi.macAddress();
+    doc["firmwareVersion"] = "1.0.0";
+  
+    String payload;
+    serializeJson(doc, payload);
+  
+    http.begin(url);
+    http.addHeader("Content-Type", "application/json");
+  
+    int httpCode = http.POST(payload);
+  
+    if (httpCode > 0) {
+        String response = http.getString();
+        Serial.printf("✓ Device registered (HTTP %d)\n", httpCode);
+        serverRegistered = true;
+    } else {
+        Serial.printf("✗ Registration failed: %s\n", http.errorToString(httpCode).c_str());
+        serverRegistered = false;
+    }
+  
+    http.end();
+}
+
+// ============================================
+// SEND HEARTBEAT
+// ============================================
+void sendHeartbeat() {
+    if (!wifiConnected) return;
+  
+    String url = String(SERVER_URL) + "/api/iot/heartbeat/" + DEVICE_ID;
+  
+    StaticJsonDocument<128> doc;
+    doc["ipAddress"] = WiFi.localIP().toString();
+  
+    String payload;
+    serializeJson(doc, payload);
+  
+    http.begin(url);
+    http.addHeader("Content-Type", "application/json");
+  
+    int httpCode = http.POST(payload);
+  
+    if (httpCode > 0) {
+        Serial.println("♥ Heartbeat sent");
+    } else {
+        Serial.printf("✗ Heartbeat failed: %s\n", http.errorToString(httpCode).c_str());
+    }
+  
+    http.end();
+}
+
+// ============================================
+// SEND EVENT TO BACKEND
+// ============================================
+void sendEvent(const char* eventType, const char* severity, const char* message) {
+    if (!wifiConnected) {
+        Serial.println("⚠ Cannot send event - WiFi disconnected");
+        return;
+    }
+  
+    String url = String(SERVER_URL) + "/api/iot/events";
+  
+    Serial.printf("Sending %s event to server...\n", eventType);
+  
+    // Create JSON payload
+    StaticJsonDocument<512> doc;
+    doc["deviceId"] = DEVICE_ID;
+    doc["eventType"] = eventType;
+    doc["severity"] = severity;
+    doc["message"] = message;
+  
+    // Add sensor data
+    JsonObject sensorData = doc.createNestedObject("sensorData");
+    sensorData["magnitude"] = magnitude;
+    sensorData["variance"] = variance;
+    sensorData["linearMagnitude"] = linearMagnitude;
+    sensorData["tiltAngleDeg"] = tiltAngleDeg;
+    sensorData["gyroMagnitudeDps"] = gyroMagnitude;
+    sensorData["profileName"] = activeProfile.name;
+    sensorData["accelerometerX"] = ax;
+    sensorData["accelerometerY"] = ay;
+    sensorData["accelerometerZ"] = az;
+    sensorData["gyroscopeX"] = gx;
+    sensorData["gyroscopeY"] = gy;
+    sensorData["gyroscopeZ"] = gz;
+
+    JsonArray preImpact = sensorData.createNestedArray("preImpact");
+    for (int i = 0; i < PRE_IMPACT_SAMPLES; i++) {
+        int index = (preImpactIndex + i) % PRE_IMPACT_SAMPLES;
+        JsonObject entry = preImpact.createNestedObject();
+        entry["mag"] = preImpactMag[index];
+        entry["lin"] = preImpactLinear[index];
+        entry["tilt"] = preImpactTilt[index];
+    }
+  
+    String payload;
+    serializeJson(doc, payload);
+  
+    http.begin(url);
+    http.addHeader("Content-Type", "application/json");
+  
+    int httpCode = http.POST(payload);
+  
+    if (httpCode > 0) {
+        String response = http.getString();
+        Serial.printf("✓ Event sent successfully (HTTP %d)\n", httpCode);
+    } else {
+        Serial.printf("✗ Event send failed: %s\n", http.errorToString(httpCode).c_str());
+        pingServer();
+    }
+  
+    http.end();
+}
+
+// ============================================
+// LED BLINK
+// ============================================
+void blinkLED(int times, int delayMs) {
+    for (int i = 0; i < times; i++) {
+        digitalWrite(LED_PIN, HIGH);
+        delay(delayMs);
+        digitalWrite(LED_PIN, LOW);
+        delay(delayMs);
+    }
+}
+
+// ============================================
+// PING BACKEND SERVER
+// ============================================
+void pingServer() {
+    if (!wifiConnected) return;
+
+    String url = String(SERVER_URL) + "/actuator/health";
+    Serial.printf("Pinging server: %s\n", url.c_str());
+
+    http.begin(url);
+    int httpCode = http.GET();
+
+    if (httpCode > 0) {
+        String response = http.getString();
+        Serial.printf("✓ Server reachable (HTTP %d): %s\n", httpCode, response.c_str());
+    } else {
+        Serial.printf("✗ Server ping failed: %s\n", http.errorToString(httpCode).c_str());
+    }
+
+    http.end();
+}
+
+// ============================================
+// PROFILE SELECTION LOGIC
+// ============================================
+MotionProfile selectCriticalProfile() {
+    if (MIX_HAS_HAZARDOUS) return PROFILE_HAZARDOUS;
+    if (MIX_HAS_FRAGILE) return PROFILE_FRAGILE;
+    return PROFILE_HEAVY;
+}
+
+MotionProfile buildMixedProfile() {
+    MotionProfile critical = selectCriticalProfile();
+
+    MotionProfile mixed = critical;
+    mixed.name = "Mixed (Lowest Common Denominator)";
+
+    // Use lowest thresholds across included categories
+    if (MIX_HAS_FRAGILE) {
+        mixed.ffThresholdG = min(mixed.ffThresholdG, PROFILE_FRAGILE.ffThresholdG);
+        mixed.motThresholdG = min(mixed.motThresholdG, PROFILE_FRAGILE.motThresholdG);
+    }
+    if (MIX_HAS_HAZARDOUS) {
+        mixed.ffThresholdG = min(mixed.ffThresholdG, PROFILE_HAZARDOUS.ffThresholdG);
+        mixed.motThresholdG = min(mixed.motThresholdG, PROFILE_HAZARDOUS.motThresholdG);
+    }
+    if (MIX_HAS_HEAVY) {
+        mixed.ffThresholdG = min(mixed.ffThresholdG, PROFILE_HEAVY.ffThresholdG);
+        mixed.motThresholdG = min(mixed.motThresholdG, PROFILE_HEAVY.motThresholdG);
+    }
+
+    // Increase duration slightly to avoid false positives for sensitive thresholds
+    mixed.ffDurationMs = (uint16_t)(max(mixed.ffDurationMs, critical.ffDurationMs) + DURATION_PADDING_MS);
+    mixed.motDurationMs = (uint16_t)(max(mixed.motDurationMs, critical.motDurationMs) + DURATION_PADDING_MS);
+
+    return mixed;
+}
+
+float clampFloat(float value, float minValue, float maxValue) {
+    return value < minValue ? minValue : (value > maxValue ? maxValue : value);
+}

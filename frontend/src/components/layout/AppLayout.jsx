@@ -1,9 +1,11 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { ShoppingCart, User, Search, Menu, X, Package, LogOut, Heart, Settings, Wallet } from 'lucide-react';
-import { useState } from 'react';
+import { ShoppingCart, User, Search, Menu, X, Package, LogOut, Heart, Settings, Wallet, AlertTriangle } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import useAuthStore from '../../stores/authStore';
 import useCartStore from '../../stores/cartStore';
 import NotificationBell from '../NotificationBell';
+import { iotAPI } from '../../services/api';
+import toast from 'react-hot-toast';
 
 export default function AppLayout({ children }) {
   const { user, logout } = useAuthStore();
@@ -12,6 +14,8 @@ export default function AppLayout({ children }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const alertAudioRef = useRef(null);
+  const alertedEventsRef = useRef(new Set());
 
   const cartItemCount = items?.reduce((sum, item) => sum + item.quantity, 0) || 0;
   const isAdmin = user?.role === 'ADMIN';
@@ -30,10 +34,72 @@ export default function AppLayout({ children }) {
     navigate('/');
   };
 
+  useEffect(() => {
+    if (!isAdmin && !isEmployee) return;
+
+    const pollAlerts = async () => {
+      try {
+        const res = await iotAPI.getUnacknowledgedEvents();
+        const events = res.data || [];
+        const relevant = events.filter(event => {
+          if (!['FALL', 'IMPACT'].includes(event.eventType)) return false;
+          if (isAdmin) return true;
+          const userId = user?.id || user?.userId;
+          return event.employeeId && userId && event.employeeId === userId;
+        });
+
+        const newEvents = relevant.filter(event => !alertedEventsRef.current.has(event.id));
+        if (newEvents.length === 0) return;
+
+        newEvents.forEach(event => alertedEventsRef.current.add(event.id));
+
+        alertAudioRef.current?.play().catch(() => {});
+        const latest = newEvents[0];
+        toast.custom((t) => (
+          <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} max-w-md w-full bg-red-600 text-white shadow-lg rounded-lg pointer-events-auto flex ring-1 ring-black ring-opacity-5`}>
+            <div className="flex-1 w-0 p-4">
+              <div className="flex items-start">
+                <AlertTriangle className="w-10 h-10 text-white animate-pulse" />
+                <div className="ml-3 flex-1">
+                  <p className="text-lg font-bold">🚨 {latest.eventType} DETECTED!</p>
+                  <p className="mt-1 text-sm text-red-100">Device: {latest.deviceId}</p>
+                  {latest.orderId && <p className="text-sm text-red-100">Order: {latest.orderId}</p>}
+                  <p className="text-sm text-red-100">
+                    {latest.eventType === 'FALL'
+                      ? 'Product fell - Employee returning to hub'
+                      : 'Impact detected - Handle with care'}
+                  </p>
+                  {newEvents.length > 1 && (
+                    <p className="text-xs text-red-100 mt-2">+{newEvents.length - 1} more alert(s)</p>
+                  )}
+                </div>
+              </div>
+            </div>
+            <div className="flex border-l border-red-500">
+              <button onClick={() => toast.dismiss(t.id)} className="w-full border border-transparent rounded-none rounded-r-lg p-4 flex items-center justify-center text-sm font-medium text-red-100 hover:text-white focus:outline-none">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+        ), { duration: 10000 });
+      } catch (error) {
+        // silent
+      }
+    };
+
+    pollAlerts();
+    const interval = setInterval(pollAlerts, 5000);
+    return () => clearInterval(interval);
+  }, [isAdmin, isEmployee, user?.id, user?.userId]);
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white shadow-sm border-b sticky top-0 z-50">
+        <audio
+          ref={alertAudioRef}
+          src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2teleAsffLvf/9BtABVtr/P/sT8A"
+        />
 
         {/* Main Header */}
         <div className="max-w-7xl mx-auto px-4 py-4">
@@ -101,10 +167,10 @@ export default function AppLayout({ children }) {
             <div className="flex items-center gap-4">
               {/* Notification Bell for Admin/Employee */}
               {isAdmin && (
-                <NotificationBell userType="admin" />
+                <NotificationBell userType="admin" enableToasts={false} />
               )}
               {isEmployee && (
-                <NotificationBell userType="employee" />
+                <NotificationBell userType="employee" enableToasts={false} />
               )}
 
               {/* Cart - Hide for Admin/Employee */}

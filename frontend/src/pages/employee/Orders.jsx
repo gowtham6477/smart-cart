@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Loader2, AlertCircle, ShoppingBag, X, Package, Truck, CheckCircle, Clock, XCircle, ChevronRight, Phone, MapPin, RefreshCw, AlertTriangle, RotateCcw } from 'lucide-react';
-import { workerAPI, iotAPI } from '../../services/api';
+import { Loader2, AlertCircle, ShoppingBag, X, Package, Truck, CheckCircle, Clock, XCircle, ChevronRight, Phone, MapPin, RefreshCw, RotateCcw } from 'lucide-react';
+import { workerAPI } from '../../services/api';
 import toast from 'react-hot-toast';
 
 const ORDER_STATUSES = [
@@ -10,8 +10,6 @@ const ORDER_STATUSES = [
   { value: 'OUT_FOR_DELIVERY', label: 'Out for Delivery', color: 'bg-orange-100 text-orange-700', icon: Truck },
   { value: 'DELIVERED', label: 'Delivered', color: 'bg-green-100 text-green-700', icon: CheckCircle },
   { value: 'CANCELLED', label: 'Cancelled', color: 'bg-red-100 text-red-700', icon: XCircle },
-  { value: 'DAMAGED', label: 'Damaged', color: 'bg-red-100 text-red-700', icon: AlertCircle },
-  { value: 'RETURNING_TO_HUB', label: '⚠️ Return to Hub', color: 'bg-red-100 text-red-700', icon: AlertTriangle },
   { value: 'AWAITING_REPLACEMENT', label: 'Awaiting Replacement', color: 'bg-yellow-100 text-yellow-700', icon: RotateCcw },
 ];
 
@@ -40,10 +38,11 @@ export default function EmployeeOrders() {
       setLoading(true);
       const res = await workerAPI.getOrders();
       console.log('Employee orders response:', res.data);
-  const rawOrders = res.data.data || [];
-  const byId = Array.from(new Map(rawOrders.map(order => [order.id, order])).values());
-  const uniqueOrders = Array.from(new Map(byId.map(order => [order.orderNumber || order.id, order])).values());
-  setOrders(uniqueOrders);
+      const rawOrders = res.data.data || [];
+      const byId = Array.from(new Map(rawOrders.map(order => [order.id, order])).values());
+      const uniqueOrders = Array.from(new Map(byId.map(order => [order.orderNumber || order.id, order])).values());
+  const filteredOrders = uniqueOrders.filter(order => !['RETURNING_TO_HUB', 'DAMAGED'].includes(order.status));
+  setOrders(filteredOrders);
       setError(null);
     } catch (err) {
       console.error('Failed to load orders:', err);
@@ -70,68 +69,6 @@ export default function EmployeeOrders() {
     setShowDetailModal(true);
   };
 
-  const handleStatusUpdate = async (orderId, newStatus) => {
-    setUpdatingStatus(true);
-    try {
-      await workerAPI.updateOrderStatus(orderId, newStatus);
-      toast.success(`Order status updated to ${newStatus}`);
-
-      // Update local state
-      setOrders(orders.map(o =>
-        o.id === orderId ? { ...o, status: newStatus } : o
-      ));
-
-      // Update selected order if it's the one being viewed
-      if (selectedOrder?.id === orderId) {
-        setSelectedOrder({ ...selectedOrder, status: newStatus });
-      }
-    } catch (err) {
-      const errorMsg = err?.response?.data?.message || 'Failed to update order status';
-      toast.error(errorMsg);
-    } finally {
-      setUpdatingStatus(false);
-    }
-  };
-
-  // Handle "Returned to Hub" action after fall incident
-  const handleReturnedToHub = async (orderId) => {
-    setUpdatingStatus(true);
-    try {
-      const reason = window.prompt('Enter reason for returning to hub (fall incident):');
-      if (reason === null) {
-        setUpdatingStatus(false);
-        return;
-      }
-
-      if (!reason.trim()) {
-        toast.error('Return reason is required');
-        setUpdatingStatus(false);
-        return;
-      }
-
-      await iotAPI.markReturnedToHub(orderId, reason.trim());
-      toast.success('Order marked as returned to hub. Replacement will be prepared.');
-      
-      // Update local state
-      setOrders(orders.map(o =>
-        o.id === orderId ? { ...o, status: 'AWAITING_REPLACEMENT' } : o
-      ));
-
-      // Update selected order if it's the one being viewed
-      if (selectedOrder?.id === orderId) {
-        setSelectedOrder({ ...selectedOrder, status: 'AWAITING_REPLACEMENT' });
-      }
-
-      // Reload orders to get fresh data
-      loadOrders();
-    } catch (err) {
-      const errorMsg = err?.response?.data?.message || 'Failed to mark as returned';
-      toast.error(errorMsg);
-    } finally {
-      setUpdatingStatus(false);
-    }
-  };
-
   const getStatusConfig = (status) => {
     return ORDER_STATUSES.find(s => s.value === status) || ORDER_STATUSES[0];
   };
@@ -143,7 +80,6 @@ export default function EmployeeOrders() {
 
   const pendingStatuses = ['PENDING', 'CONFIRMED', 'PROCESSING', 'ASSIGNED', 'SHIPPED', 'OUT_FOR_DELIVERY'];
   const completedStatuses = ['DELIVERED'];
-  const damagedStatuses = ['RETURNING_TO_HUB', 'DAMAGED'];
   const replacementStatuses = ['AWAITING_REPLACEMENT'];
 
   const filterDefinitions = [
@@ -158,19 +94,9 @@ export default function EmployeeOrders() {
       predicate: (order) => completedStatuses.includes(order.status),
     },
     {
-      key: 'damaged',
-      label: 'Damaged',
-      predicate: (order) => damagedStatuses.includes(order.status),
-    },
-    {
       key: 'replacement',
       label: 'Replacement',
-      predicate: (order) => replacementStatuses.includes(order.status) && !order.returnToHubReason,
-    },
-    {
-      key: 'returned',
-      label: 'Returned to Hub',
-      predicate: (order) => replacementStatuses.includes(order.status) && !!order.returnToHubReason,
+      predicate: (order) => replacementStatuses.includes(order.status),
     },
   ];
 
@@ -354,42 +280,12 @@ export default function EmployeeOrders() {
 
               {/* Card Actions */}
               <div className="p-4 bg-gray-50 border-t border-gray-100">
-                {/* Show special UI for RETURNING_TO_HUB status */}
-                {order.status === 'RETURNING_TO_HUB' ? (
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
-                      <AlertTriangle className="w-5 h-5 text-red-500" />
-                      <div className="flex-1">
-                        <p className="font-semibold text-red-700">⚠️ FALL DETECTED</p>
-                        <p className="text-sm text-red-600">Return to hub immediately. Do not deliver.</p>
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => handleReturnedToHub(order.id)}
-                        disabled={updatingStatus}
-                        className="flex-1 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
-                      >
-                        <RotateCcw className="w-5 h-5" />
-                        {updatingStatus ? 'Processing...' : 'Returned to Hub'}
-                      </button>
-                      <button
-                        onClick={() => handleViewDetails(order)}
-                        className="px-4 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 font-medium"
-                      >
-                        Details
-                      </button>
-                    </div>
-                  </div>
-                ) : order.status === 'AWAITING_REPLACEMENT' ? (
+                {order.status === 'AWAITING_REPLACEMENT' ? (
                   <div className="space-y-3">
                     <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-center">
                       <RotateCcw className="w-6 h-6 text-yellow-600 mx-auto mb-2" />
                       <p className="font-semibold text-yellow-700">Awaiting Replacement</p>
                       <p className="text-sm text-yellow-600">Admin will reassign once replacement is ready</p>
-                      {order.returnToHubReason && (
-                        <p className="text-xs text-yellow-700 mt-2">Reason: {order.returnToHubReason}</p>
-                      )}
                     </div>
                     <button
                       onClick={() => handleViewDetails(order)}
@@ -400,21 +296,9 @@ export default function EmployeeOrders() {
                   </div>
                 ) : (
                   <div className="flex items-center gap-2">
-                    <select
-                      value={order.status || 'ASSIGNED'}
-                      onChange={(e) => handleStatusUpdate(order.id, e.target.value)}
-                      disabled={updatingStatus}
-                      className="flex-1 px-3 py-2 text-sm font-medium border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                    >
-                      {ORDER_STATUSES.filter(s => !['RETURNING_TO_HUB', 'AWAITING_REPLACEMENT'].includes(s.value)).map(status => (
-                        <option key={status.value} value={status.value}>
-                          {status.label}
-                        </option>
-                      ))}
-                    </select>
                     <button
                       onClick={() => handleViewDetails(order)}
-                      className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm font-medium flex items-center gap-1"
+                      className="w-full px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm font-medium flex items-center justify-center gap-1"
                     >
                       Details
                       <ChevronRight className="w-4 h-4" />
@@ -448,38 +332,6 @@ export default function EmployeeOrders() {
 
             {/* Modal Content */}
             <div className="p-6 space-y-6">
-              {/* Special Alert for FALL incident */}
-              {selectedOrder.status === 'RETURNING_TO_HUB' && (
-                <div className="bg-red-50 border-2 border-red-300 rounded-xl p-6">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
-                      <AlertTriangle className="w-7 h-7 text-red-600" />
-                    </div>
-                    <div>
-                      <h3 className="text-xl font-bold text-red-700">⚠️ FALL DETECTED</h3>
-                      <p className="text-red-600">Product may be damaged. Return to hub immediately.</p>
-                    </div>
-                  </div>
-                  <div className="bg-white rounded-lg p-4 mb-4">
-                    <p className="text-gray-700 font-medium">Instructions:</p>
-                    <ul className="text-sm text-gray-600 mt-2 space-y-1 list-disc list-inside">
-                      <li>Do NOT deliver this product to the customer</li>
-                      <li>Return to the hub with the product</li>
-                      <li>Click "Returned to Hub" once you arrive</li>
-                      <li>Admin will prepare a replacement</li>
-                    </ul>
-                  </div>
-                  <button
-                    onClick={() => handleReturnedToHub(selectedOrder.id)}
-                    disabled={updatingStatus}
-                    className="w-full py-4 bg-orange-600 text-white rounded-lg hover:bg-orange-700 font-bold text-lg flex items-center justify-center gap-2 disabled:opacity-50"
-                  >
-                    <RotateCcw className="w-6 h-6" />
-                    {updatingStatus ? 'Processing...' : 'Returned to Hub'}
-                  </button>
-                </div>
-              )}
-
               {selectedOrder.status === 'AWAITING_REPLACEMENT' && (
                 <div className="bg-yellow-50 border-2 border-yellow-300 rounded-xl p-6 text-center">
                   <RotateCcw className="w-12 h-12 text-yellow-600 mx-auto mb-3" />
@@ -488,11 +340,6 @@ export default function EmployeeOrders() {
                     This order is waiting for a replacement product. 
                     Admin will reassign once the replacement is ready.
                   </p>
-                  {selectedOrder.returnToHubReason && (
-                    <p className="text-sm text-yellow-700 mt-3">
-                      Return reason: {selectedOrder.returnToHubReason}
-                    </p>
-                  )}
                   {selectedOrder.attemptCount && (
                     <p className="text-sm text-yellow-600 mt-2">
                       Delivery Attempt #{selectedOrder.attemptCount}
@@ -501,26 +348,7 @@ export default function EmployeeOrders() {
                 </div>
               )}
 
-              {/* Status Update - Only show for normal statuses */}
-              {!['RETURNING_TO_HUB', 'AWAITING_REPLACEMENT'].includes(selectedOrder.status) && (
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Update Status
-                  </label>
-                  <select
-                    value={selectedOrder.status || 'ASSIGNED'}
-                    onChange={(e) => handleStatusUpdate(selectedOrder.id, e.target.value)}
-                    disabled={updatingStatus}
-                    className={`w-full px-4 py-3 rounded-lg font-semibold text-sm ${statusConfig?.color} border-2 border-gray-200`}
-                  >
-                    {ORDER_STATUSES.filter(s => !['RETURNING_TO_HUB', 'AWAITING_REPLACEMENT'].includes(s.value)).map(status => (
-                      <option key={status.value} value={status.value}>
-                        {status.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
+
 
               {/* Customer Contact */}
               <div>

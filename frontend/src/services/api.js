@@ -138,6 +138,7 @@ export const adminAPI = {
   getAllOrders: (params) => apiClient.get('/admin/orders', { params }),
   updateOrderStatus: (orderId, status) => apiClient.put(`/admin/orders/${orderId}/status`, { status }),
   assignOrder: (orderId, employeeId) => apiClient.post(`/admin/orders/${orderId}/assign/${employeeId}`),
+  clearAllOrders: () => apiClient.post('/admin/orders/clear-all'),
 
   // Coupons
   getCoupons: (params) => apiClient.get('/admin/coupons', { params }),
@@ -160,7 +161,9 @@ export const adminAPI = {
   getReplacementPolicy: () => apiClient.get('/admin/replacement-policy'),
   updateReplacementPolicy: (data) => apiClient.put('/admin/replacement-policy', data),
   getReplacementRequests: (params) => apiClient.get('/admin/replacements', { params }),
+  getReplacementByOrder: (orderId) => apiClient.get(`/admin/replacements/order/${orderId}`),
   reviewReplacementRequest: (requestId, data) => apiClient.post(`/admin/replacements/${requestId}/review`, data),
+  approveReplacement: (requestId) => apiClient.post(`/admin/replacements/${requestId}/approve`),
 
   // Inventory
   getInventory: () => apiClient.get('/admin/inventory'),

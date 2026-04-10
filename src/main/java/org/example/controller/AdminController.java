@@ -197,6 +197,16 @@ public class AdminController {
         return ResponseEntity.ok(ApiResponse.success("Orders retrieved successfully", orders));
     }
 
+    @PostMapping("/orders/clear-all")
+    public ResponseEntity<ApiResponse<Map<String, Long>>> clearAllOrders() {
+        try {
+            Map<String, Long> result = orderService.clearAllOrders();
+            return ResponseEntity.ok(ApiResponse.success("All orders cleared", result));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
+        }
+    }
+
     // Replacement Policy
     @GetMapping("/replacement-policy")
     public ResponseEntity<ApiResponse<ReplacementPolicy>> getReplacementPolicy() {
@@ -224,6 +234,12 @@ public class AdminController {
         return ResponseEntity.ok(ApiResponse.success("Replacement requests retrieved", requests));
     }
 
+    @GetMapping("/replacements/order/{orderId}")
+    public ResponseEntity<ApiResponse<ReplacementRequest>> getReplacementByOrder(@PathVariable String orderId) {
+        ReplacementRequest request = replacementService.getLatestRequestForOrder(orderId);
+        return ResponseEntity.ok(ApiResponse.success("Replacement request retrieved", request));
+    }
+
     @PostMapping("/replacements/{requestId}/review")
     public ResponseEntity<ApiResponse<ReplacementRequest>> reviewReplacement(
             @PathVariable String requestId,
@@ -231,6 +247,19 @@ public class AdminController {
             @RequestHeader(value = "userId", required = false) String adminId) {
         ReplacementRequest reviewed = replacementService.reviewRequest(requestId, adminId, request);
         return ResponseEntity.ok(ApiResponse.success("Replacement request reviewed", reviewed));
+    }
+
+    @PostMapping("/replacements/{requestId}/approve")
+    public ResponseEntity<ApiResponse<ReplacementRequest>> approveReplacement(
+            @PathVariable String requestId,
+            @RequestHeader(value = "userId", required = false) String adminId) {
+        ReplacementReviewRequest reviewRequest = new ReplacementReviewRequest();
+        reviewRequest.setStatus(ReplacementRequest.Status.APPROVED.name());
+        reviewRequest.setNote("Approved by admin");
+
+        replacementService.reviewRequest(requestId, adminId, reviewRequest);
+        ReplacementRequest applied = replacementService.confirmReplacement(null, requestId);
+        return ResponseEntity.ok(ApiResponse.success("Replacement approved and applied", applied));
     }
 
     // Inventory Management

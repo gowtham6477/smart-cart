@@ -73,11 +73,21 @@ public class CustomerController {
                     .orElseThrow(() -> new RuntimeException("User not found"));
 
             if (request.getName() != null) user.setName(request.getName());
-            if (request.getMobile() != null) user.setMobile(request.getMobile());
+            if (request.getMobile() != null) {
+                if (!isValidIndianMobile(request.getMobile())) {
+                    throw new RuntimeException("Invalid mobile number. Use 10-digit Indian mobile number starting with 6-9.");
+                }
+                user.setMobile(request.getMobile());
+            }
             if (request.getAddress() != null) user.setAddress(request.getAddress());
             if (request.getCity() != null) user.setCity(request.getCity());
             if (request.getState() != null) user.setState(request.getState());
-            if (request.getPincode() != null) user.setPincode(request.getPincode());
+            if (request.getPincode() != null) {
+                if (!isValidPincode(request.getPincode())) {
+                    throw new RuntimeException("Invalid pincode. Use 6-digit Indian pincode.");
+                }
+                user.setPincode(request.getPincode());
+            }
 
             User saved = userRepository.save(user);
             saved.setPassword(null);
@@ -267,6 +277,14 @@ public class CustomerController {
         }
 
         return userId;
+    }
+
+    private boolean isValidIndianMobile(String mobile) {
+        return mobile != null && mobile.matches("^[6-9]\\d{9}$");
+    }
+
+    private boolean isValidPincode(String pincode) {
+        return pincode != null && pincode.matches("^\\d{6}$");
     }
 }
 

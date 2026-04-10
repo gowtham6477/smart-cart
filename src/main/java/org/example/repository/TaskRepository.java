@@ -16,5 +16,6 @@ public interface TaskRepository extends MongoRepository<Task, String> {
     List<Task> findByIsLocked(Boolean isLocked);
     Long countByAssignedToAndStatus(String employeeId, Task.TaskStatus status);
     List<Task> findByOrderId(String orderId);
+    long deleteByOrderIdNotNull();
 }
 

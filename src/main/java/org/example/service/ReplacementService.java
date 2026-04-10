@@ -97,6 +97,14 @@ public class ReplacementService {
         return requestRepository.findByEmployeeIdOrderByCreatedAtDesc(employeeId);
     }
 
+    public ReplacementRequest getLatestRequestForOrder(String orderId) {
+        if (orderId == null || orderId.isBlank()) {
+            return null;
+        }
+        List<ReplacementRequest> requests = requestRepository.findByOrderIdOrderByCreatedAtDesc(orderId);
+        return requests.isEmpty() ? null : requests.get(0);
+    }
+
     public ReplacementRequest createReplacementFromTask(String employeeId, String orderId, String reason) {
         if (employeeId == null || employeeId.isBlank()) {
             throw new RuntimeException("Employee not found for replacement request");
@@ -344,7 +352,7 @@ public class ReplacementService {
         }
 
         recalculateTotals(order);
-        order.setStatus(Order.OrderStatus.PROCESSING);
+    order.setStatus(Order.OrderStatus.PROCESSING);
         order.setIsSecondAttempt(true);
         order.setAttemptCount(order.getAttemptCount() != null ? order.getAttemptCount() + 1 : 2);
 
@@ -376,7 +384,63 @@ public class ReplacementService {
                 order.getId()
         );
 
+        Task replacementTask = buildReplacementTask(order, request);
+        if (replacementTask != null) {
+            taskRepository.save(replacementTask);
+            if (replacementTask.getAssignedTo() != null) {
+                notificationService.notifyTaskAssigned(
+                    replacementTask.getAssignedTo(),
+                    replacementTask.getTitle(),
+                    replacementTask.getId()
+                );
+                order.setStatus(Order.OrderStatus.ASSIGNED);
+                orderRepository.save(order);
+            }
+        }
+
         return request;
+    }
+
+    private Task buildReplacementTask(Order order, ReplacementRequest request) {
+        if (order == null) {
+            return null;
+        }
+
+        Task task = new Task();
+        task.setTaskNumber("TASK-" + System.currentTimeMillis() + "-" + (int) (Math.random() * 1000));
+        task.setTitle("Replacement Delivery: " + order.getOrderNumber());
+
+        StringBuilder description = new StringBuilder();
+        description.append("Customer: ").append(order.getCustomerName()).append("\n");
+        description.append("Order: ").append(order.getOrderNumber()).append("\n");
+        if (request != null && request.getReplacementItem() != null) {
+            description.append("Replacement Item: ")
+                    .append(request.getReplacementItem().getProductName())
+                    .append(" x")
+                    .append(request.getReplacementItem().getQuantity())
+                    .append("\n");
+        }
+        description.append("Delivery Address: ").append(order.getDeliveryAddress());
+        if (order.getCity() != null) {
+            description.append(", ").append(order.getCity());
+        }
+        if (order.getPincode() != null) {
+            description.append(" - ").append(order.getPincode());
+        }
+
+        task.setDescription(description.toString());
+        task.setOrderId(order.getId());
+        task.setAssignedTo(order.getEmployeeId());
+        task.setAssignedToName(order.getEmployeeName());
+        task.setPriority(Task.TaskPriority.HIGH);
+        task.setStatus(order.getEmployeeId() != null ? Task.TaskStatus.ASSIGNED : Task.TaskStatus.PENDING);
+        task.setAssignedAt(order.getEmployeeId() != null ? LocalDateTime.now() : null);
+        task.setAssignedBy("Replacement System");
+        task.setDueDate(order.getEstimatedDelivery() != null ? order.getEstimatedDelivery() : LocalDateTime.now().plusDays(2));
+        task.setCreatedAt(LocalDateTime.now());
+        task.setNotes("Replacement task created after approval");
+
+        return task;
     }
 
     private void recalculateTotals(Order order) {

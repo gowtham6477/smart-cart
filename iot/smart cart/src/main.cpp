@@ -14,7 +14,7 @@ const char* WIFI_SSID = "realme P1 Pro 5G";        // <-- Change this
 const char* WIFI_PASSWORD = "helloworld"; // <-- Change this
 
 // Backend Server URL (your Spring Boot server)
-const char* SERVER_URL = "http://10.145.126.138:8080";  // <-- Change to your server IP
+const char* SERVER_URL = "http://10.112.92.138:8080";  // <-- Change to your server IP
 
 // Device ID (unique for each ESP32)
 const char* DEVICE_ID = "ESP32-001";  // <-- Change for each device
@@ -27,11 +27,70 @@ const char* DEVICE_ID = "ESP32-001";  // <-- Change for each device
 #define LED_PIN 2
 
 // ============================================
-// DETECTION THRESHOLDS
+// CATEGORY PROFILES + THRESHOLDS
 // ============================================
-const float FALL_THRESHOLD = 2.5;       // g-force for fall detection
-const float IMPACT_THRESHOLD = 3.5;     // g-force for impact detection
-const float VIBRATION_THRESHOLD = 0.8;  // variance for vibration
+enum PackageCategory {
+  CATEGORY_FRAGILE,   // Glassware, Ceramics, Instruments, Jewelry
+  CATEGORY_HAZARDOUS, // Batteries, Flammables, Pharma, Electronics
+  CATEGORY_HEAVY      // Industrial equipment, sculptures, antiques
+};
+
+struct MotionProfile {
+  const char* name;
+  float ffThresholdG;      // Free-fall threshold (g)
+  uint16_t ffDurationMs;   // Free-fall duration (ms)
+  float motThresholdG;     // Impact/motion threshold (g)
+  uint16_t motDurationMs;  // Impact/motion duration (ms)
+  float tiltThresholdDeg;  // Tilt threshold (deg)
+  float tumbleGyroDps;     // Tumble angular velocity (deg/s)
+  bool useZeroMotion;
+  bool useHpf;
+};
+
+// Base profiles (single-category)
+const MotionProfile PROFILE_FRAGILE = {
+  "Fragile/Precision",
+  0.35f, // 350mg
+  20,
+  0.08f, // 80mg (micro-impact)
+  20,
+  25.0f,
+  90.0f,
+  false,
+  true
+};
+
+const MotionProfile PROFILE_HAZARDOUS = {
+  "Structural/Hazardous",
+  0.45f, // 450mg
+  50,
+  1.5f,  // 1g-2g
+  40,
+  20.0f,
+  140.0f,
+  true,
+  true
+};
+
+const MotionProfile PROFILE_HEAVY = {
+  "Heavy/Industrial",
+  0.60f, // 600mg
+  100,
+  0.50f, // 500mg
+  60,
+  30.0f,
+  160.0f,
+  false,
+  true
+};
+
+// Mixed package configuration (lowest common denominator rule)
+const bool MIX_HAS_FRAGILE = true;
+const bool MIX_HAS_HAZARDOUS = false;
+const bool MIX_HAS_HEAVY = false;
+
+// Pro tip: increase duration slightly to avoid road-noise false positives
+const uint16_t DURATION_PADDING_MS = 20;
 
 // Cooldown to prevent multiple events
 const unsigned long EVENT_COOLDOWN = 5000;  // 5 seconds between same event type
@@ -46,8 +105,34 @@ HTTPClient http;
 float ax, ay, az;
 float gx, gy, gz;
 float magnitude;
+float linearMagnitude;
+float tiltAngleDeg;
+float gyroMagnitude;
 float previousMagnitude = 1.0;
 float variance;
+
+// Gravity compensation (linear acceleration)
+float gravityX = 0.0f;
+float gravityY = 0.0f;
+float gravityZ = 1.0f;
+const float GRAVITY_ALPHA = 0.98f;
+
+// Active profile
+MotionProfile activeProfile = PROFILE_FRAGILE;
+
+// Detection timers
+unsigned long ffStart = 0;
+unsigned long motStart = 0;
+unsigned long tiltStart = 0;
+unsigned long zeroMotionStart = 0;
+bool impactLatched = false;
+
+// Pre-impact buffer (FIFO ~100ms)
+const int PRE_IMPACT_SAMPLES = 10;
+float preImpactMag[PRE_IMPACT_SAMPLES];
+float preImpactTilt[PRE_IMPACT_SAMPLES];
+float preImpactLinear[PRE_IMPACT_SAMPLES];
+int preImpactIndex = 0;
 
 // Timing
 unsigned long lastHeartbeat = 0;
@@ -70,6 +155,9 @@ void sendHeartbeat();
 void sendEvent(const char* eventType, const char* severity, const char* message);
 void blinkLED(int times, int delayMs);
 void pingServer();
+MotionProfile selectCriticalProfile();
+MotionProfile buildMixedProfile();
+float clampFloat(float value, float minValue, float maxValue);
 
 // ============================================
 // SETUP
@@ -102,13 +190,21 @@ void setup() {
   
   if (mpu.testConnection()) {
     Serial.println("✓ MPU6050 connected successfully");
-    mpu.setFullScaleAccelRange(MPU6050_ACCEL_FS_4);
-    mpu.setFullScaleGyroRange(MPU6050_GYRO_FS_500);
+    mpu.setFullScaleAccelRange(MPU6050_ACCEL_FS_16); // High-G clipping management
+    mpu.setFullScaleGyroRange(MPU6050_GYRO_FS_2000);
   } else {
     Serial.println("✓ MPU6050 found, configuring...");
-    mpu.setFullScaleAccelRange(MPU6050_ACCEL_FS_4);
-    mpu.setFullScaleGyroRange(MPU6050_GYRO_FS_500);
+    mpu.setFullScaleAccelRange(MPU6050_ACCEL_FS_16);
+    mpu.setFullScaleGyroRange(MPU6050_GYRO_FS_2000);
   }
+
+  activeProfile = buildMixedProfile();
+  Serial.printf("Active Profile: %s | FF %.2fg/%ums | MOT %.2fg/%ums\n",
+                activeProfile.name,
+                activeProfile.ffThresholdG,
+                activeProfile.ffDurationMs,
+                activeProfile.motThresholdG,
+                activeProfile.motDurationMs);
   
   // Connect to WiFi
   connectWiFi();
@@ -157,30 +253,106 @@ void loop() {
   magnitude = sqrt(ax * ax + ay * ay + az * az);
   variance = abs(magnitude - previousMagnitude);
   previousMagnitude = magnitude;
-  
-  // ===== FALL DETECTION =====
-  if (magnitude > FALL_THRESHOLD && magnitude < IMPACT_THRESHOLD) {
-    if (currentTime - lastFallEvent > EVENT_COOLDOWN) {
-      Serial.println("\n🚨 ========== FALL DETECTED! ==========");
+
+  // Gravity compensation (linear acceleration)
+  gravityX = GRAVITY_ALPHA * gravityX + (1.0f - GRAVITY_ALPHA) * ax;
+  gravityY = GRAVITY_ALPHA * gravityY + (1.0f - GRAVITY_ALPHA) * ay;
+  gravityZ = GRAVITY_ALPHA * gravityZ + (1.0f - GRAVITY_ALPHA) * az;
+
+  float linX = ax - gravityX;
+  float linY = ay - gravityY;
+  float linZ = az - gravityZ;
+  linearMagnitude = sqrt(linX * linX + linY * linY + linZ * linZ);
+
+  // Tilt angle from gravity vector
+  float gMag = sqrt(gravityX * gravityX + gravityY * gravityY + gravityZ * gravityZ);
+  float normalizedZ = gMag > 0.0f ? gravityZ / gMag : 1.0f;
+  normalizedZ = clampFloat(normalizedZ, -1.0f, 1.0f);
+  tiltAngleDeg = acos(normalizedZ) * 180.0f / PI;
+
+  gyroMagnitude = sqrt(gx * gx + gy * gy + gz * gz);
+
+  // FIFO buffer (pre-impact signature)
+  preImpactMag[preImpactIndex] = magnitude;
+  preImpactTilt[preImpactIndex] = tiltAngleDeg;
+  preImpactLinear[preImpactIndex] = linearMagnitude;
+  preImpactIndex = (preImpactIndex + 1) % PRE_IMPACT_SAMPLES;
+
+  // ===== FREE-FALL DETECTION =====
+  if (magnitude < activeProfile.ffThresholdG) {
+    if (ffStart == 0) ffStart = currentTime;
+    if (currentTime - ffStart >= activeProfile.ffDurationMs && currentTime - lastFallEvent > EVENT_COOLDOWN) {
+      Serial.println("\n🚨 ========== FREE-FALL DETECTED! ==========");
       Serial.printf("    Magnitude: %.2f g\n", magnitude);
       Serial.println("    =====================================\n");
       
-      sendEvent("FALL", "HIGH", "Product fall detected during delivery");
+      sendEvent("FALL", "HIGH", "Free-fall detected - inspection required");
       lastFallEvent = currentTime;
+      ffStart = 0;
       blinkLED(5, 100);
     }
+  } else {
+    ffStart = 0;
   }
-  
-  // ===== IMPACT DETECTION =====
-  if (magnitude > IMPACT_THRESHOLD) {
-    if (currentTime - lastImpactEvent > EVENT_COOLDOWN) {
-      Serial.println("\n🔴 ======= CRITICAL IMPACT! ==========");
-      Serial.printf("    Magnitude: %.2f g\n", magnitude);
+
+  // ===== IMPACT / MICRO-IMPACT DETECTION =====
+  if (linearMagnitude > activeProfile.motThresholdG) {
+    if (motStart == 0) motStart = currentTime;
+    if (currentTime - motStart >= activeProfile.motDurationMs && currentTime - lastImpactEvent > EVENT_COOLDOWN) {
+      const bool isFragile = activeProfile.motThresholdG <= PROFILE_FRAGILE.motThresholdG;
+      const char* eventType = isFragile ? "ABNORMAL_MOVEMENT" : "IMPACT";
+      const char* severity = isFragile ? "HIGH" : "CRITICAL";
+      const char* message = isFragile
+        ? "Micro-impact detected - inspection required"
+        : "Impact detected - package may be damaged";
+
+      impactLatched = activeProfile.useZeroMotion;
+
+      Serial.println("\n🔴 ======= IMPACT DETECTED! ==========");
+      Serial.printf("    Linear Mag: %.2f g\n", linearMagnitude);
       Serial.println("    =====================================\n");
       
-      sendEvent("IMPACT", "CRITICAL", "Severe impact detected - package may be damaged");
+      sendEvent(eventType, severity, message);
       lastImpactEvent = currentTime;
+      motStart = 0;
       blinkLED(10, 50);
+    }
+  } else {
+    motStart = 0;
+  }
+
+  // ===== ZERO-MOTION CONFIRMATION (Hazardous) =====
+  if (activeProfile.useZeroMotion && impactLatched) {
+    if (linearMagnitude < 0.05f) {
+      if (zeroMotionStart == 0) zeroMotionStart = currentTime;
+      if (currentTime - zeroMotionStart > 200) {
+        sendEvent("IMPACT", "CRITICAL", "Impact detected and motion stopped - possible crash/spill");
+        impactLatched = false;
+        zeroMotionStart = 0;
+      }
+    } else {
+      zeroMotionStart = 0;
+    }
+  }
+
+  // ===== TILT DETECTION (Heavy/Fragile) =====
+  if (tiltAngleDeg > activeProfile.tiltThresholdDeg) {
+    if (tiltStart == 0) tiltStart = currentTime;
+    if (currentTime - tiltStart > 200 && currentTime - lastImpactEvent > EVENT_COOLDOWN) {
+      sendEvent("ABNORMAL_MOVEMENT", "HIGH", "Tilt detected - possible toppling risk");
+      lastImpactEvent = currentTime;
+      tiltStart = 0;
+    }
+  } else {
+    tiltStart = 0;
+  }
+
+  // ===== TUMBLE DETECTION =====
+  if (gyroMagnitude > activeProfile.tumbleGyroDps && linearMagnitude > activeProfile.motThresholdG) {
+    if (currentTime - lastImpactEvent > EVENT_COOLDOWN) {
+      sendEvent("ABNORMAL_MOVEMENT", "HIGH", "Tumble detected - unstable handling");
+      lastImpactEvent = currentTime;
+      blinkLED(6, 80);
     }
   }
   
@@ -192,8 +364,8 @@ void loop() {
   
   // Print sensor data every second
   if (currentTime - lastPrintTime > 1000) {
-    Serial.printf("Mag: %.2fg | Var: %.3f | WiFi: %s\n",
-                  magnitude, variance, 
+    Serial.printf("Mag: %.2fg | Lin: %.2fg | Tilt: %.1f° | WiFi: %s\n",
+                  magnitude, linearMagnitude, tiltAngleDeg,
                   wifiConnected ? "Connected" : "Disconnected");
     lastPrintTime = currentTime;
   }
@@ -315,12 +487,25 @@ void sendEvent(const char* eventType, const char* severity, const char* message)
   JsonObject sensorData = doc.createNestedObject("sensorData");
   sensorData["magnitude"] = magnitude;
   sensorData["variance"] = variance;
+  sensorData["linearMagnitude"] = linearMagnitude;
+  sensorData["tiltAngleDeg"] = tiltAngleDeg;
+  sensorData["gyroMagnitudeDps"] = gyroMagnitude;
+  sensorData["profileName"] = activeProfile.name;
   sensorData["accelerometerX"] = ax;
   sensorData["accelerometerY"] = ay;
   sensorData["accelerometerZ"] = az;
   sensorData["gyroscopeX"] = gx;
   sensorData["gyroscopeY"] = gy;
   sensorData["gyroscopeZ"] = gz;
+
+  JsonArray preImpact = sensorData.createNestedArray("preImpact");
+  for (int i = 0; i < PRE_IMPACT_SAMPLES; i++) {
+    int index = (preImpactIndex + i) % PRE_IMPACT_SAMPLES;
+    JsonObject entry = preImpact.createNestedObject();
+    entry["mag"] = preImpactMag[index];
+    entry["lin"] = preImpactLinear[index];
+    entry["tilt"] = preImpactTilt[index];
+  }
   
   String payload;
   serializeJson(doc, payload);
@@ -373,4 +558,44 @@ void pingServer() {
   }
 
   http.end();
+}
+
+// ============================================
+// PROFILE SELECTION LOGIC
+// ============================================
+MotionProfile selectCriticalProfile() {
+  if (MIX_HAS_HAZARDOUS) return PROFILE_HAZARDOUS;
+  if (MIX_HAS_FRAGILE) return PROFILE_FRAGILE;
+  return PROFILE_HEAVY;
+}
+
+MotionProfile buildMixedProfile() {
+  MotionProfile critical = selectCriticalProfile();
+
+  MotionProfile mixed = critical;
+  mixed.name = "Mixed (Lowest Common Denominator)";
+
+  // Use lowest thresholds across included categories
+  if (MIX_HAS_FRAGILE) {
+    mixed.ffThresholdG = min(mixed.ffThresholdG, PROFILE_FRAGILE.ffThresholdG);
+    mixed.motThresholdG = min(mixed.motThresholdG, PROFILE_FRAGILE.motThresholdG);
+  }
+  if (MIX_HAS_HAZARDOUS) {
+    mixed.ffThresholdG = min(mixed.ffThresholdG, PROFILE_HAZARDOUS.ffThresholdG);
+    mixed.motThresholdG = min(mixed.motThresholdG, PROFILE_HAZARDOUS.motThresholdG);
+  }
+  if (MIX_HAS_HEAVY) {
+    mixed.ffThresholdG = min(mixed.ffThresholdG, PROFILE_HEAVY.ffThresholdG);
+    mixed.motThresholdG = min(mixed.motThresholdG, PROFILE_HEAVY.motThresholdG);
+  }
+
+  // Increase duration slightly to avoid false positives for sensitive thresholds
+  mixed.ffDurationMs = (uint16_t)(max(mixed.ffDurationMs, critical.ffDurationMs) + DURATION_PADDING_MS);
+  mixed.motDurationMs = (uint16_t)(max(mixed.motDurationMs, critical.motDurationMs) + DURATION_PADDING_MS);
+
+  return mixed;
+}
+
+float clampFloat(float value, float minValue, float maxValue) {
+  return value < minValue ? minValue : (value > maxValue ? maxValue : value);
 }

@@ -209,6 +209,44 @@ Monitoring started...
 Mag: 1.00 | Var: 0.05 | Ax: 0.00 | Ay: 0.00 | Az: 1.00
 ```
 
+---
+
+## 📡 Category Profiles & Sensitivity Logic
+
+The firmware now supports **category-based detection profiles** and **mixed-package logic**.
+
+### ✅ Base Profiles
+
+| Category | FF Threshold | FF Duration | MOT Threshold | MOT Duration | Notes |
+|----------|--------------|-------------|---------------|--------------|-------|
+| High-Fragility (Glass/Ceramics/Instruments/Jewelry) | 350mg | 20ms | 50–100mg | 20ms | Micro-impact = inspection required |
+| Structural/Hazardous (Batteries/Chemicals/Electronics) | 450mg | 40–50ms | 1–2g | 40ms | Zero-motion confirm + latch |
+| Heavy Industrial (Equipment/Sculptures/Antiques) | 500–600mg | 100ms | 500mg | 60ms | Tilt + tumble detection |
+
+### ✅ Lowest-Common-Denominator Rule
+If multiple categories are in a single shipment, thresholds are chosen using the **lowest thresholds** across the mix.
+
+Example:
+> Electronics + Batteries ⇒ use Electronics sensitivity for FF/MOT, but keep Hazardous safety rules.
+
+### ✅ Critical Item Selection
+If any hazardous item exists, **hazardous becomes primary**. Otherwise the most fragile item dominates.
+
+### ✅ Pro Tips Applied in Firmware
+1. **Pre-Impact FIFO**: last ~100ms of motion is buffered and sent with the event.
+2. **High-G Clipping Avoidance**: MPU6050 runs at ±16g.
+3. **Gravity Vector Compensation**: linear acceleration is computed with a low-pass gravity filter.
+4. **Duration Padding**: durations are slightly increased to reduce pothole false positives.
+
+### 🔧 Where to Configure
+In `iot/smart cart/src/main.cpp`:
+
+- `PROFILE_FRAGILE`, `PROFILE_HAZARDOUS`, `PROFILE_HEAVY`
+- `MIX_HAS_FRAGILE`, `MIX_HAS_HAZARDOUS`, `MIX_HAS_HEAVY`
+- `DURATION_PADDING_MS`
+
+Update the mix flags to match your shipment types before flashing the device.
+
 ### Test 2: Fall Detection
 
 1. **Hold device steady**

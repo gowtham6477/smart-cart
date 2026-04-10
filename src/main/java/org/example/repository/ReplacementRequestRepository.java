@@ -11,4 +11,6 @@ public interface ReplacementRequestRepository extends MongoRepository<Replacemen
     List<ReplacementRequest> findByEmployeeIdOrderByCreatedAtDesc(String employeeId);
     List<ReplacementRequest> findByStatusOrderByCreatedAtDesc(ReplacementRequest.Status status);
     List<ReplacementRequest> findAllByOrderByCreatedAtDesc();
+    List<ReplacementRequest> findByOrderIdOrderByCreatedAtDesc(String orderId);
+    long deleteByOrderIdNotNull();
 }
